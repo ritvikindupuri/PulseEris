@@ -91,6 +91,12 @@ This diagram outlines the primary actors and their interactions with the PulsePo
 
 ```mermaid
 graph LR
+    actor Dispatcher
+    actor EMT
+    actor Supervisor
+    actor COO
+    actor Admin
+
     subgraph "System: PulsePoint ERIS"
         UC1(Log Emergency Call)
         UC2(Assign Team to Call)
@@ -137,12 +143,6 @@ graph LR
     Supervisor -- "signs in" --> UC14;
     COO -- "signs in" --> UC14;
     Admin -- "signs in" --> UC14;
-
-    actor Dispatcher
-    actor EMT
-    actor Supervisor
-    actor COO
-    actor Admin
 ```
 
 ## 3. State Management
