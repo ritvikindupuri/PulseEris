@@ -109,9 +109,11 @@ const LiveMapPanel: React.FC<LiveMapPanelProps> = ({ activeCalls, teams }) => {
                             style={{ top: `${pos.top}%`, left: `${pos.left}%`, transform: 'translate(-50%, -50%)' }}
                         >
                             <GpsIcon className={`h-7 w-7 ${call.priority === 1 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`} />
-                             <div className="absolute bottom-full mb-2 w-max max-w-xs bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                P{call.priority}: {call.location}
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900"></div>
+                             <div className="absolute bottom-full mb-2 w-56 bg-gray-900/90 backdrop-blur-sm text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg text-left">
+                                <p className="font-bold border-b border-gray-700 pb-1 mb-1">P{call.priority}: {call.location}</p>
+                                <p><span className="font-semibold text-gray-400">Caller:</span> {call.callerName}</p>
+                                <p><span className="font-semibold text-gray-400">Desc:</span> {call.description.substring(0, 40)}{call.description.length > 40 ? '...' : ''}</p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900/90"></div>
                             </div>
                         </div>
                     );
@@ -119,6 +121,7 @@ const LiveMapPanel: React.FC<LiveMapPanelProps> = ({ activeCalls, teams }) => {
                 {/* Render Teams */}
                 {teams.map(team => {
                     const pos = positions[`team-${team.id}`];
+                    const assignedCall = team.assignedCallId ? activeCalls.find(c => c.id === team.assignedCallId) : null;
                     if (!pos) return null;
                     return (
                         <div
@@ -127,9 +130,14 @@ const LiveMapPanel: React.FC<LiveMapPanelProps> = ({ activeCalls, teams }) => {
                             style={{ top: `${pos.top}%`, left: `${pos.left}%`, transform: 'translate(-50%, -50%)' }}
                         >
                             <TeamIcon className={`h-8 w-8 ${getTeamColor(team.status)}`} />
-                            <div className="absolute bottom-full mb-2 w-max max-w-xs bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                {team.name} ({team.status})
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900"></div>
+                            <div className="absolute bottom-full mb-2 w-56 bg-gray-900/90 backdrop-blur-sm text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg text-left">
+                                <p className="font-bold border-b border-gray-700 pb-1 mb-1">{team.name} ({team.grade})</p>
+                                <p><span className="font-semibold text-gray-400">Status:</span> {team.status}</p>
+                                <p><span className="font-semibold text-gray-400">Members:</span> {team.members.map(m => m.username).join(', ')}</p>
+                                {assignedCall && (
+                                    <p><span className="font-semibold text-gray-400">Assigned:</span> {assignedCall.location}</p>
+                                )}
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900/90"></div>
                             </div>
                         </div>
                     );
