@@ -35,7 +35,7 @@ graph TD;
             S -- Contains --> F[PCRs];
             S -- Contains --> G[Schedule];
             S -- Contains --> H[Audit Log];
-            S -- Contains --> I[UI State (View, Theme, etc)];
+            S -- Contains --> I["UI State (View, Theme, etc)"];
         end;
         
         V -->|'login'| Login[LoginPage];
@@ -109,34 +109,34 @@ graph LR
         UC15(View Shift Analytics)
         UC16(Export Incident Data)
 
-        UC1 -- uses --> Gemini(AI Priority Suggestion)
+        UC1 -- "uses" --> Gemini(AI Priority Suggestion)
     end
     
-    Dispatcher -- Manages --> UC1;
-    Dispatcher -- Manages --> UC2;
-    Dispatcher -- Views --> UC3;
-    Dispatcher -- Generates --> UC4;
+    Dispatcher -- "Manages" --> UC1;
+    Dispatcher -- "Manages" --> UC2;
+    Dispatcher -- "Views" --> UC3;
+    Dispatcher -- "Generates" --> UC4;
     
-    EMT -- Interacts with --> UC5;
-    EMT -- Submits --> UC6;
-    EMT -- Performs --> UC7;
-    EMT -- Views --> UC15;
+    EMT -- "Interacts with" --> UC5;
+    EMT -- "Submits" --> UC6;
+    EMT -- "Performs" --> UC7;
+    EMT -- "Views" --> UC15;
 
-    Supervisor -- Performs --> UC8;
-    Supervisor -- Performs --> UC9;
-    Supervisor -- Generates --> UC10;
-    Supervisor -- Performs --> UC16;
+    Supervisor -- "Performs" --> UC8;
+    Supervisor -- "Performs" --> UC9;
+    Supervisor -- "Generates" --> UC10;
+    Supervisor -- "Performs" --> UC16;
     
-    COO -- Views --> UC11;
+    COO -- "Views" --> UC11;
     
-    Admin -- Views --> UC12;
-    Admin -- Performs --> UC13;
+    Admin -- "Views" --> UC12;
+    Admin -- "Performs" --> UC13;
     
-    Dispatcher -- signs in --> UC14;
-    EMT -- signs in --> UC14;
-    Supervisor -- signs in --> UC14;
-    COO -- signs in --> UC14;
-    Admin -- signs in --> UC14;
+    Dispatcher -- "signs in" --> UC14;
+    EMT -- "signs in" --> UC14;
+    Supervisor -- "signs in" --> UC14;
+    COO -- "signs in" --> UC14;
+    Admin -- "signs in" --> UC14;
 
     actor Dispatcher
     actor EMT
