@@ -8,37 +8,44 @@
 
 ## 📖 Introduction
 
-PulsePoint ERIS is a modern, web-based application designed to streamline the operations of emergency response teams. It provides a centralized platform for dispatchers to log incoming calls, for EMTs to manage their assignments in the field, and for supervisors to monitor operational efficiency. With its clean, role-based interface and real-time data updates, PulsePoint ERIS is built to perform under pressure, ensuring that critical information is always accurate and accessible.
+PulsePoint ERIS is a modern, web-based application designed to streamline the operations of emergency response teams. It provides a centralized, role-based platform for every level of an emergency response organization. Dispatchers can log incoming calls with AI-assisted priority suggestions and manage units on a live map. EMTs can handle their assignments in the field. Supervisors can manage team rosters and weekly schedules. COOs can analyze operational performance against service level agreements. And Administrators can audit system activity.
 
-This application serves as a comprehensive solution for:
-- **Call Intake & Triage:** Quickly capturing and prioritizing emergency calls.
-- **Dispatch Management:** Visualizing team status and location for efficient dispatch.
-- **Field Operations:** Providing EMTs with the incident details they need to respond effectively.
-- **Incident Reporting:** Ensuring complete and compliant patient care records for every call.
-- **Operational Oversight:** Giving managers the data to make informed decisions.
+With its clean, role-based interface and real-time data updates, PulsePoint ERIS is built to perform under pressure, ensuring that critical information is always accurate and accessible.
 
 ## ✨ Core Features
 
 PulsePoint ERIS provides a tailored experience for each role within an emergency response organization.
 
 ### For Dispatchers
-- **Real-Time Call Queue:** View all active emergency calls, automatically sorted by priority and time.
-- **Advanced Filtering & Search:** Instantly find calls by caller name, phone number, location, priority, or status.
-- **Live Team Availability Panel:** See a real-time overview of all on-duty EMTs, their current status (Available, Dispatched, Away), and their assigned base station.
-- **Efficient Call Logging:** A dedicated form to quickly capture critical information, including caller details, location, nearest landmark, and a description of the emergency.
-- **Urgent Visual Cues:** High-contrast, color-coded priority levels, including a flashing animation for the most critical (Priority 1) incidents.
+- **AI-Assisted Call Logging:** A dedicated form to quickly capture critical information, with a Gemini-powered AI that automatically suggests a priority level based on the incident description.
+- **Live Status Map:** A dynamic map providing a real-time (simulated) view of all active incidents and team locations. Available teams patrol randomly, while dispatched teams move toward their assigned incident.
+- **Interactive Call Queue:** View all pending incidents, automatically sorted by priority, with a clear visual distinction for Priority 1 calls.
+- **Advanced Search:** Instantly find pending calls by location or description.
+- **Efficient Dispatching:** Select a pending call and assign it to any available team with a single click.
+- **End-of-Day Reporting:** Generate an instant modal report summarizing the day's call volume, priority breakdown, and average dispatch time.
 
 ### For EMTs (Emergency Medical Technicians)
-- **Prioritized Task List:** View a clear, ordered list of assigned calls, ensuring the most critical incidents are addressed first.
-- **Interactive Workflow:** Manage your response status with prominent action buttons: "Clock In/Out", "En Route", "On Scene", and "Submit PCR".
-- **Live Map Integration:** View the exact location of the active call on an embedded map for quick navigation.
-- **Detailed Patient Care Records (PCR):** After an incident, fill out a comprehensive form to log patient vitals, treatments administered, medications, and transfer destination.
-- **Shift Summary Analytics:** An at-a-glance dashboard with charts showing a breakdown of calls handled during your shift.
+- **Focused Assignment View:** A clear, detailed card shows the current active assignment, including location, caller details, and incident description.
+- **Interactive Status Updates:** Manage your response status with a logical workflow of action buttons: "On Scene," "Transporting," and "Complete Call," which become enabled as the incident progresses.
+- **Clock In / Out:** Easily manage your on-duty status for the day.
+- **Detailed Patient Care Records (PCR):** After completing a call, fill out a comprehensive form to log patient vitals, treatments administered, medications, and transfer destination.
+- **Shift Summary Analytics:** An at-a-glance dashboard with a doughnut chart showing a breakdown of calls handled by priority during the current shift.
 
-### For Supervisors & Managers
-- **High-Level Operational Dashboard:** Key performance indicators (KPIs) are displayed in clear "stat cards," showing total calls, open incidents, and PCR compliance rates.
-- **Detailed Incident Log:** A comprehensive, sortable log of all calls, showing status, priority, and whether a PCR has been filed.
-- **Full Data Export:** Export the complete incident log to a CSV file with a single click for offline analysis, auditing, or record-keeping.
+### For Supervisors
+- **High-Level Operational Dashboard:** Key performance indicators (KPIs) are displayed in clear "stat cards," showing total calls, open incidents, PCRs filed, total personnel, and teams on duty.
+- **Team Roster Management:** View, filter (by station or grade), and manage all teams. An intuitive modal allows for editing team names, grades, and member assignments.
+- **Weekly Scheduling Tool:** A powerful scheduling interface to assign teams to day and night shifts for the entire week.
+- **Shift Handover Reporting:** Generate an "Exception Report" that lists all currently open incidents, their age, and assigned team, ensuring a smooth handover between shifts.
+- **Full Data Export:** Export the complete list of open incidents to a CSV file with a single click for offline analysis or record-keeping.
+
+### For COOs (Chief Operating Officers)
+- **Executive SLA Dashboard:** An analytics-focused dashboard for viewing Service Level Agreement (SLA) performance.
+- **Key Performance Metrics:** Stat cards display critical metrics like Average Dispatch Time, Average On-Scene Time, Average Total Response Time, and overall SLA Compliance Percentage.
+- **SLA Compliance Visualization:** A clear bar chart shows the percentage of responses that met or missed the target response time.
+
+### For Administrators
+- **System Audit Log:** A comprehensive, immutable log of all significant actions taken within the system, including user logins, call creations, status updates, and more.
+- **System Backup:** A one-click function to trigger a manual system backup (simulated).
 
 ### System-Wide Features
 - **Secure Authentication:** A complete login and sign-up system ensures only authorized personnel can access the system.
@@ -50,13 +57,14 @@ PulsePoint ERIS provides a tailored experience for each role within an emergency
 
 A typical incident workflow in PulsePoint ERIS looks like this:
 
-1.  **Call Intake:** A dispatcher receives an emergency call and uses the "Log Emergency Call" form to input the details, assigning a priority level.
-2.  **Dispatch:** The new call appears instantly in the dispatcher's "Active Calls" queue. The dispatcher checks the "Team Availability" panel to identify the nearest available EMT unit.
-3.  **Assignment:** The call is assigned to an EMT. The call appears on that EMT's dashboard.
-4.  **Response:** The EMT clocks in, views the call details and location on the map, and updates their status to "En Route" and then "On Scene". These status changes are reflected in real-time on the dispatcher's availability panel.
-5.  **Reporting:** After resolving the incident, the EMT's status becomes "Submit PCR". They fill out the detailed Patient Care Record form.
-6.  **Closure:** Once the PCR is submitted, the call status is automatically updated to "Closed" across the system.
-7.  **Oversight:** A supervisor can log in at any time to see the updated incident log, view the PCR compliance rate, and export the data for weekly reports.
+1.  **Call Intake:** A dispatcher receives a call and uses the "Log New Call" form. As they type the description, a Gemini-powered AI suggests a priority level.
+2.  **Dispatch:** The new call appears in the dispatcher's queue. The dispatcher views the `Live Status Map` to identify the best unit and assigns the call.
+3.  **Response:** The assigned EMT sees the new incident on their dashboard. They update their status from `Dispatched` to `On Scene`, and their icon on the live map stops moving. These status changes are reflected in real-time across the system.
+4.  **Reporting:** After resolving the incident and marking it `Completed`, the EMT is prompted to `File PCR`. They fill out the detailed patient care record.
+5.  **Oversight & Management:**
+    - A **Supervisor** can log in to see the updated team statuses, generate an exception report for shift handover, or manage the upcoming week's schedule.
+    - The **COO** reviews their dashboard to see how this call impacted the day's SLA compliance metrics.
+    - An **Admin** can see the entire lifecycle of the call—from creation to PCR filing—in the audit log.
 
 ## 💻 Technology Stack
 
@@ -66,10 +74,11 @@ PulsePoint ERIS is a modern frontend application built with industry-standard te
 - **TypeScript:** Adds static typing to JavaScript for improved code quality and maintainability.
 - **Tailwind CSS:** A utility-first CSS framework for rapid, custom UI development.
 - **Chart.js:** A flexible library for creating beautiful and informative data visualizations.
+- **@google/genai (Gemini API):** Integrated for AI-powered priority suggestions during call logging.
 
 ## 🔮 Future Enhancements (Version 2+)
 
--   **Mobile EMT Application:** Dedicated iOS/Android apps for even faster data entry in the field.
+-   **Real-Time Backend:** Replace the local state simulation with a true backend service (e.g., Node.js with WebSockets) for real-time data synchronization across all clients.
+-   **Mobile EMT Application:** Dedicated iOS/Android apps for even faster data entry and GPS integration in the field.
 -   **Predictive Analytics:** Use historical data to forecast demand and optimize resource allocation.
--   **AI-Assisted Dispatch:** Provide dispatchers with intelligent suggestions for the best unit to assign.
 -   **Billing & Hospital Integration:** Streamline the data pipeline for billing and patient handovers.

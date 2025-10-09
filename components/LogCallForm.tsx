@@ -60,9 +60,11 @@ const LogCallForm: React.FC<LogCallFormProps> = ({ onSubmit, onCancel }) => {
     if (debounceTimeout.current) {
         clearTimeout(debounceTimeout.current);
     }
-    // Set loading to true as soon as the user starts typing
+    // Set loading to true as soon as the user starts typing, and false if they delete text
     if (formData.description.trim().length > 10) {
         setIsSuggesting(true);
+    } else {
+        setIsSuggesting(false);
     }
     debounceTimeout.current = window.setTimeout(() => {
         fetchPrioritySuggestion(formData.description);
