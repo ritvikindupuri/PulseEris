@@ -91,11 +91,11 @@ This diagram outlines the primary actors and their interactions with the PulsePo
 
 ```mermaid
 graph LR
-    actor Dispatcher
-    actor EMT
-    actor Supervisor
-    actor COO
-    actor Admin
+    Dispatcher((Dispatcher))
+    EMT((EMT))
+    Supervisor((Supervisor))
+    COO((COO))
+    Admin((Admin))
 
     subgraph "System: PulsePoint ERIS"
         UC1(Log Emergency Call)
