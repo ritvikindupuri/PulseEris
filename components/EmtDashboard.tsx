@@ -4,6 +4,7 @@ import { MapPinIcon } from './icons/MapPinIcon';
 import { FileTextIcon } from './icons/FileTextIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import ShiftSummaryCharts from './ShiftSummaryCharts';
+import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 
 interface EmtDashboardProps {
   user: User;
@@ -119,11 +120,27 @@ const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFileP
                         </div>
                     </div>
                 ) : (
-                    <div className="text-center py-16 px-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl h-full flex flex-col items-center justify-center">
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">No active assignment</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                           Your team is available for dispatch.
-                        </p>
+                    <div className="text-center py-12 px-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl h-full flex flex-col items-center justify-center">
+                        <ShieldCheckIcon className="h-16 w-16 text-green-500 mb-4" />
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Ready for Dispatch</h3>
+                        {myTeam ? (
+                            <>
+                                <p className="mt-2 text-md text-gray-600 dark:text-gray-400">
+                                    <span className="font-semibold">{myTeam.name}</span> is currently <span className="font-bold text-green-600 dark:text-green-400">{myTeam.status}</span>.
+                                </p>
+                                <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-left w-full max-w-xs mx-auto space-y-1">
+                                    <p><strong>Base Station:</strong> {myTeam.baseStation}</p>
+                                    <p><strong>Personnel:</strong> {myTeam.members.map(m => m.username).join(', ')}</p>
+                                </div>
+                                <p className="mt-6 text-sm text-gray-500 dark:text-gray-400 italic">
+                                    Awaiting next assignment from dispatch.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="mt-2 text-md text-gray-600 dark:text-gray-400">
+                                You are not currently assigned to a team.
+                            </p>
+                        )}
                     </div>
                 )}
             </div>

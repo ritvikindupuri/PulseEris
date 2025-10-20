@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { EmergencyCall, CallStatus, User, UserRole, Team, TeamGrade, TeamStatus, BaseStation, Schedule } from '../types';
+import { EmergencyCall, CallStatus, User, UserRole, Team, TeamGrade, TeamStatus, BaseStation, Schedule, EmtStatus } from '../types';
 import { ReportIcon } from './icons/ReportIcon';
 import { UsersIcon } from './icons/UsersIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -20,6 +20,7 @@ interface SupervisorDashboardProps {
 const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users, teams, schedule, onUpdateTeam, onUpdateSchedule }) => {
   const [gradeFilter, setGradeFilter] = useState<TeamGrade | 'all'>('all');
   const [baseStationFilter, setBaseStationFilter] = useState<BaseStation | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<EmtStatus | 'all'>('all');
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [showScheduler, setShowScheduler] = useState(false);
   const [showExceptionReport, setShowExceptionReport] = useState(false);
@@ -35,9 +36,10 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
   const filteredTeams = useMemo(() => {
     return teams.filter(team => 
       (gradeFilter === 'all' || team.grade === gradeFilter) &&
-      (baseStationFilter === 'all' || team.baseStation === baseStationFilter)
+      (baseStationFilter === 'all' || team.baseStation === baseStationFilter) &&
+      (statusFilter === 'all' || team.members.some(member => member.status === statusFilter))
     );
-  }, [teams, gradeFilter, baseStationFilter]);
+  }, [teams, gradeFilter, baseStationFilter, statusFilter]);
 
   const openIncidents = useMemo(() => {
     return calls.filter(c => c.status !== CallStatus.COMPLETED && c.status !== CallStatus.CANCELLED);
@@ -121,7 +123,13 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
         <div className="lg:col-span-2 bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2"><UsersIcon/> Team Roster & Status</h2>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <select onChange={(e) => setStatusFilter(e.target.value as EmtStatus | 'all')} value={statusFilter} className="text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md py-1">
+                        <option value="all">All Statuses</option>
+                        <option value={EmtStatus.ON_DUTY}>On Duty</option>
+                        <option value={EmtStatus.OFF_DUTY}>Off Duty</option>
+                        <option value={EmtStatus.ON_BREAK}>On Break</option>
+                    </select>
                     <select onChange={(e) => setBaseStationFilter(e.target.value as BaseStation | 'all')} value={baseStationFilter} className="text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md py-1">
                         <option value="all">All Stations</option>
                         <option value="North">North</option>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
@@ -25,111 +24,90 @@ const SCHEDULE_STORAGE_KEY = 'pulsepoint_eris_schedule';
 const AUDIT_LOG_STORAGE_KEY = 'pulsepoint_eris_audit_log';
 const DARK_MODE_KEY = 'pulsepoint_eris_dark_mode';
 
+const loadStateFromLocalStorage = () => {
+    try {
+        // Users
+        const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+        const users: User[] = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+
+        // Calls (with date parsing)
+        const savedCalls = localStorage.getItem(CALLS_STORAGE_KEY);
+        let calls: EmergencyCall[] = INITIAL_CALLS;
+        if (savedCalls) {
+            const parsedCalls = JSON.parse(savedCalls);
+            calls = parsedCalls.map((call: any) => ({
+                ...call,
+                timestamp: new Date(call.timestamp),
+                dispatchTimestamp: call.dispatchTimestamp ? new Date(call.dispatchTimestamp) : undefined,
+                onSceneTimestamp: call.onSceneTimestamp ? new Date(call.onSceneTimestamp) : undefined,
+                completedTimestamp: call.completedTimestamp ? new Date(call.completedTimestamp) : undefined,
+            }));
+        }
+
+        // Teams (with hydration using the users we just loaded)
+        const savedTeams = localStorage.getItem(TEAMS_STORAGE_KEY);
+        let teams: Team[] = INITIAL_TEAMS;
+        if (savedTeams) {
+            const parsedTeams = JSON.parse(savedTeams) as Team[];
+            teams = parsedTeams.map(team => ({
+                ...team,
+                members: team.members.map(member => users.find(u => u.id === member.id)).filter((u): u is User => !!u)
+            }));
+        }
+        
+        // PCRs
+        const savedPcrs = localStorage.getItem(PCRS_STORAGE_KEY);
+        const pcrs: PatientCareRecord[] = savedPcrs ? JSON.parse(savedPcrs) : [];
+
+        // Schedule
+        const savedSchedule = localStorage.getItem(SCHEDULE_STORAGE_KEY);
+        const schedule: Schedule = savedSchedule ? JSON.parse(savedSchedule) : INITIAL_SCHEDULE;
+
+        // Audit Log (with date parsing)
+        const savedLogs = localStorage.getItem(AUDIT_LOG_STORAGE_KEY);
+        let auditLog: AuditLogEntry[] = INITIAL_AUDIT_LOGS;
+        if (savedLogs) {
+            const parsedLogs = JSON.parse(savedLogs);
+            auditLog = parsedLogs.map((log: any) => ({
+                ...log,
+                timestamp: new Date(log.timestamp),
+            }));
+        }
+
+        // Dark Mode
+        const savedMode = localStorage.getItem(DARK_MODE_KEY);
+        const isDarkMode = savedMode ? JSON.parse(savedMode) : false;
+
+        return { users, calls, teams, pcrs, schedule, auditLog, isDarkMode };
+
+    } catch (error) {
+        console.error("Could not load state from localStorage. Falling back to initial state.", error);
+        return { 
+            users: INITIAL_USERS, 
+            calls: INITIAL_CALLS, 
+            teams: INITIAL_TEAMS, 
+            pcrs: [], 
+            schedule: INITIAL_SCHEDULE, 
+            auditLog: INITIAL_AUDIT_LOGS,
+            isDarkMode: false 
+        };
+    }
+};
+
+
 const App: React.FC = () => {
+    const [initialState] = useState(loadStateFromLocalStorage);
+
     const [view, setView] = useState<AppView>('login');
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        try {
-            const savedMode = localStorage.getItem(DARK_MODE_KEY);
-            return savedMode ? JSON.parse(savedMode) : false;
-        } catch {
-            return false;
-        }
-    });
-    
-    // App state with localStorage persistence
-    const [users, setUsers] = useState<User[]>(() => {
-        try {
-            const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
-            return savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-        } catch (error) {
-            console.error("Error loading users from localStorage", error);
-            return INITIAL_USERS;
-        }
-    });
-
-    const [calls, setCalls] = useState<EmergencyCall[]>(() => {
-        try {
-            const savedCalls = localStorage.getItem(CALLS_STORAGE_KEY);
-            if (savedCalls) {
-                const parsedCalls = JSON.parse(savedCalls);
-                return parsedCalls.map((call: any) => ({
-                    ...call,
-                    timestamp: new Date(call.timestamp),
-                    dispatchTimestamp: call.dispatchTimestamp ? new Date(call.dispatchTimestamp) : undefined,
-                    onSceneTimestamp: call.onSceneTimestamp ? new Date(call.onSceneTimestamp) : undefined,
-                    completedTimestamp: call.completedTimestamp ? new Date(call.completedTimestamp) : undefined,
-                }));
-            }
-            return INITIAL_CALLS;
-        } catch (error) {
-            console.error("Error loading calls from localStorage", error);
-            return INITIAL_CALLS;
-        }
-    });
-
-    const [teams, setTeams] = useState<Team[]>(() => {
-        try {
-            const savedTeams = localStorage.getItem(TEAMS_STORAGE_KEY);
-            if (savedTeams) {
-                let allUsers: User[];
-                try {
-                    const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
-                    allUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-                } catch {
-                    allUsers = INITIAL_USERS;
-                }
-
-                const parsedTeams = JSON.parse(savedTeams) as Team[];
-                return parsedTeams.map(team => ({
-                    ...team,
-                    members: team.members.map(member => allUsers.find(u => u.id === member.id)).filter((u): u is User => !!u)
-                }));
-            }
-            return INITIAL_TEAMS;
-        } catch (error) {
-            console.error("Error loading teams from localStorage", error);
-            return INITIAL_TEAMS;
-        }
-    });
-
-    const [pcrs, setPcrs] = useState<PatientCareRecord[]>(() => {
-        try {
-            const savedPcrs = localStorage.getItem(PCRS_STORAGE_KEY);
-            return savedPcrs ? JSON.parse(savedPcrs) : [];
-        } catch (error) {
-            console.error("Error loading PCRs from localStorage", error);
-            return [];
-        }
-    });
-
-    const [schedule, setSchedule] = useState<Schedule>(() => {
-        try {
-            const savedSchedule = localStorage.getItem(SCHEDULE_STORAGE_KEY);
-            return savedSchedule ? JSON.parse(savedSchedule) : INITIAL_SCHEDULE;
-        } catch (error) {
-            console.error("Error loading schedule from localStorage", error);
-            return INITIAL_SCHEDULE;
-        }
-    });
-
-    const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(() => {
-        try {
-            const savedLogs = localStorage.getItem(AUDIT_LOG_STORAGE_KEY);
-            if (savedLogs) {
-                const parsedLogs = JSON.parse(savedLogs);
-                return parsedLogs.map((log: any) => ({
-                    ...log,
-                    timestamp: new Date(log.timestamp),
-                }));
-            }
-            return INITIAL_AUDIT_LOGS;
-        } catch (error) {
-            console.error("Error loading audit log from localStorage", error);
-            return INITIAL_AUDIT_LOGS;
-        }
-    });
+    const [isDarkMode, setIsDarkMode] = useState<boolean>(initialState.isDarkMode);
+    const [users, setUsers] = useState<User[]>(initialState.users);
+    const [calls, setCalls] = useState<EmergencyCall[]>(initialState.calls);
+    const [teams, setTeams] = useState<Team[]>(initialState.teams);
+    const [pcrs, setPcrs] = useState<PatientCareRecord[]>(initialState.pcrs);
+    const [schedule, setSchedule] = useState<Schedule>(initialState.schedule);
+    const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(initialState.auditLog);
 
     const [callToEdit, setCallToEdit] = useState<EmergencyCall | null>(null);
     const [confirmationMessage, setConfirmationMessage] = useState('');
