@@ -16,23 +16,127 @@ import { INITIAL_USERS, INITIAL_TEAMS, INITIAL_CALLS, INITIAL_SCHEDULE, INITIAL_
 
 type AppView = 'login' | 'signup' | 'dashboard' | 'logCall' | 'filePCR' | 'confirmation';
 
+// localStorage keys
+const USERS_STORAGE_KEY = 'pulsepoint_eris_users';
+const CALLS_STORAGE_KEY = 'pulsepoint_eris_calls';
+const TEAMS_STORAGE_KEY = 'pulsepoint_eris_teams';
+const PCRS_STORAGE_KEY = 'pulsepoint_eris_pcrs';
+const SCHEDULE_STORAGE_KEY = 'pulsepoint_eris_schedule';
+const AUDIT_LOG_STORAGE_KEY = 'pulsepoint_eris_audit_log';
+const DARK_MODE_KEY = 'pulsepoint_eris_dark_mode';
+
 const App: React.FC = () => {
     const [view, setView] = useState<AppView>('login');
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
-    const [isDarkMode, setIsDarkMode] = useState(false);
     
-    // App state
-    const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-    const [calls, setCalls] = useState<EmergencyCall[]>(INITIAL_CALLS);
-    const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
-    const [pcrs, setPcrs] = useState<PatientCareRecord[]>([]);
-    const [schedule, setSchedule] = useState<Schedule>(INITIAL_SCHEDULE);
-    const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        try {
+            const savedMode = localStorage.getItem(DARK_MODE_KEY);
+            return savedMode ? JSON.parse(savedMode) : false;
+        } catch {
+            return false;
+        }
+    });
+    
+    // App state with localStorage persistence
+    const [users, setUsers] = useState<User[]>(() => {
+        try {
+            const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+            return savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+        } catch (error) {
+            console.error("Error loading users from localStorage", error);
+            return INITIAL_USERS;
+        }
+    });
+
+    const [calls, setCalls] = useState<EmergencyCall[]>(() => {
+        try {
+            const savedCalls = localStorage.getItem(CALLS_STORAGE_KEY);
+            if (savedCalls) {
+                const parsedCalls = JSON.parse(savedCalls);
+                return parsedCalls.map((call: any) => ({
+                    ...call,
+                    timestamp: new Date(call.timestamp),
+                    dispatchTimestamp: call.dispatchTimestamp ? new Date(call.dispatchTimestamp) : undefined,
+                    onSceneTimestamp: call.onSceneTimestamp ? new Date(call.onSceneTimestamp) : undefined,
+                    completedTimestamp: call.completedTimestamp ? new Date(call.completedTimestamp) : undefined,
+                }));
+            }
+            return INITIAL_CALLS;
+        } catch (error) {
+            console.error("Error loading calls from localStorage", error);
+            return INITIAL_CALLS;
+        }
+    });
+
+    const [teams, setTeams] = useState<Team[]>(() => {
+        try {
+            const savedTeams = localStorage.getItem(TEAMS_STORAGE_KEY);
+            if (savedTeams) {
+                let allUsers: User[];
+                try {
+                    const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+                    allUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+                } catch {
+                    allUsers = INITIAL_USERS;
+                }
+
+                const parsedTeams = JSON.parse(savedTeams) as Team[];
+                return parsedTeams.map(team => ({
+                    ...team,
+                    members: team.members.map(member => allUsers.find(u => u.id === member.id)).filter((u): u is User => !!u)
+                }));
+            }
+            return INITIAL_TEAMS;
+        } catch (error) {
+            console.error("Error loading teams from localStorage", error);
+            return INITIAL_TEAMS;
+        }
+    });
+
+    const [pcrs, setPcrs] = useState<PatientCareRecord[]>(() => {
+        try {
+            const savedPcrs = localStorage.getItem(PCRS_STORAGE_KEY);
+            return savedPcrs ? JSON.parse(savedPcrs) : [];
+        } catch (error) {
+            console.error("Error loading PCRs from localStorage", error);
+            return [];
+        }
+    });
+
+    const [schedule, setSchedule] = useState<Schedule>(() => {
+        try {
+            const savedSchedule = localStorage.getItem(SCHEDULE_STORAGE_KEY);
+            return savedSchedule ? JSON.parse(savedSchedule) : INITIAL_SCHEDULE;
+        } catch (error) {
+            console.error("Error loading schedule from localStorage", error);
+            return INITIAL_SCHEDULE;
+        }
+    });
+
+    const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(() => {
+        try {
+            const savedLogs = localStorage.getItem(AUDIT_LOG_STORAGE_KEY);
+            if (savedLogs) {
+                const parsedLogs = JSON.parse(savedLogs);
+                return parsedLogs.map((log: any) => ({
+                    ...log,
+                    timestamp: new Date(log.timestamp),
+                }));
+            }
+            return INITIAL_AUDIT_LOGS;
+        } catch (error) {
+            console.error("Error loading audit log from localStorage", error);
+            return INITIAL_AUDIT_LOGS;
+        }
+    });
 
     const [callToEdit, setCallToEdit] = useState<EmergencyCall | null>(null);
     const [confirmationMessage, setConfirmationMessage] = useState('');
 
+    // Effects for saving state to localStorage
     useEffect(() => {
+        localStorage.setItem(DARK_MODE_KEY, JSON.stringify(isDarkMode));
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
         } else {
@@ -40,6 +144,13 @@ const App: React.FC = () => {
         }
     }, [isDarkMode]);
     
+    useEffect(() => { localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users)); }, [users]);
+    useEffect(() => { localStorage.setItem(CALLS_STORAGE_KEY, JSON.stringify(calls)); }, [calls]);
+    useEffect(() => { localStorage.setItem(TEAMS_STORAGE_KEY, JSON.stringify(teams)); }, [teams]);
+    useEffect(() => { localStorage.setItem(PCRS_STORAGE_KEY, JSON.stringify(pcrs)); }, [pcrs]);
+    useEffect(() => { localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(schedule)); }, [schedule]);
+    useEffect(() => { localStorage.setItem(AUDIT_LOG_STORAGE_KEY, JSON.stringify(auditLog)); }, [auditLog]);
+
     const logAuditEvent = (action: string, details?: string) => {
         const newLogEntry: AuditLogEntry = {
             id: auditLog.length + 1,
@@ -67,7 +178,7 @@ const App: React.FC = () => {
             return false;
         }
         const newUser: User = { 
-            id: users.length + 1, 
+            id: (users.length > 0 ? Math.max(...users.map(u => u.id)) : 0) + 1, 
             ...userData, 
             status: userData.role === UserRole.EMT ? EmtStatus.OFF_DUTY : null,
         };
@@ -86,7 +197,7 @@ const App: React.FC = () => {
 
     const handleLogCallSubmit = (callData: Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTeamId'>) => {
         const newCall: EmergencyCall = {
-            id: calls.length + 1,
+            id: (calls.length > 0 ? Math.max(...calls.map(c => c.id)) : 0) + 1,
             ...callData,
             timestamp: new Date(),
             status: CallStatus.PENDING,
@@ -134,14 +245,25 @@ const App: React.FC = () => {
     };
 
     const handleUpdateUserStatus = (userId: number, status: EmtStatus) => {
-        setUsers(prev => prev.map(u => u.id === userId ? {...u, status} : u));
+        const newUsers = users.map(u => 
+            u.id === userId ? { ...u, status } : u
+        );
+        setUsers(newUsers);
+
+        if (loggedInUser && loggedInUser.id === userId) {
+            const updatedUser = newUsers.find(u => u.id === userId);
+            if (updatedUser) {
+                setLoggedInUser(updatedUser);
+            }
+        }
+        
         logAuditEvent('User Status Updated', `User ID: ${userId}, New Status: ${status}`);
     };
     
     const handleFilePCRSubmit = (pcrData: Omit<PatientCareRecord, 'id' | 'callId'>) => {
         if (!callToEdit) return;
         const newPcr: PatientCareRecord = {
-            id: pcrs.length + 1,
+            id: (pcrs.length > 0 ? Math.max(...pcrs.map(p => p.id)) : 0) + 1,
             callId: callToEdit.id,
             ...pcrData,
         };
