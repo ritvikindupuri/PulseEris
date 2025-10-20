@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
@@ -156,7 +157,8 @@ const App: React.FC = () => {
             return false;
         }
         const newUser: User = { 
-            id: (users.length > 0 ? Math.max(...users.map(u => u.id)) : 0) + 1, 
+            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
+            id: users.map(u => u.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
             ...userData, 
             status: userData.role === UserRole.EMT ? EmtStatus.OFF_DUTY : null,
         };
@@ -175,7 +177,8 @@ const App: React.FC = () => {
 
     const handleLogCallSubmit = (callData: Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTeamId'>) => {
         const newCall: EmergencyCall = {
-            id: (calls.length > 0 ? Math.max(...calls.map(c => c.id)) : 0) + 1,
+            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
+            id: calls.map(c => c.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
             ...callData,
             timestamp: new Date(),
             status: CallStatus.PENDING,
@@ -198,7 +201,8 @@ const App: React.FC = () => {
             }
             return c;
         }));
-        if (teamId) {
+        // FIX: Using a more explicit check for teamId to ensure type safety, which resolves the type error.
+        if (teamId !== undefined) {
             let teamStatus: TeamStatus;
             switch(status) {
                 case CallStatus.DISPATCHED: teamStatus = TeamStatus.DISPATCHED; break;
@@ -241,7 +245,8 @@ const App: React.FC = () => {
     const handleFilePCRSubmit = (pcrData: Omit<PatientCareRecord, 'id' | 'callId'>) => {
         if (!callToEdit) return;
         const newPcr: PatientCareRecord = {
-            id: (pcrs.length > 0 ? Math.max(...pcrs.map(p => p.id)) : 0) + 1,
+            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
+            id: pcrs.map(p => p.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
             callId: callToEdit.id,
             ...pcrData,
         };
@@ -254,22 +259,66 @@ const App: React.FC = () => {
     };
     
     const handleUpdateTeam = (updatedTeam: Team) => {
-        setTeams(prevTeams => prevTeams.map(t => t.id === updatedTeam.id ? updatedTeam : t));
-        
-        const originalTeam = teams.find(t => t.id === updatedTeam.id);
-        const originalMemberIds = originalTeam ? originalTeam.members.map(m => m.id) : [];
-        const newMemberIds = updatedTeam.members.map(m => m.id);
+        const originalTeam = teams.find(t => t.id === updatedTeam.id)!;
+        const originalMemberIds = new Set(originalTeam.members.map(m => m.id));
+        const updatedMemberIds = new Set(updatedTeam.members.map(m => m.id));
 
-        const addedMembers = newMemberIds.filter(id => !originalMemberIds.includes(id));
-        const removedMembers = originalMemberIds.filter(id => !newMemberIds.includes(id));
+        const addedUserIds = [...updatedMemberIds].filter(id => !originalMemberIds.has(id));
+        const removedUserIds = [...originalMemberIds].filter(id => !updatedMemberIds.has(id));
 
-        setUsers(prevUsers => prevUsers.map(u => {
-            if (addedMembers.includes(u.id)) return { ...u, teamId: updatedTeam.id };
-            if (removedMembers.includes(u.id)) return { ...u, teamId: undefined };
+        // First, update the single source of truth for assignments: the users array.
+        const newUsers = users.map(u => {
+            if (addedUserIds.includes(u.id)) {
+                // This user was added to the team, so assign them. This handles re-assignments.
+                return { ...u, teamId: updatedTeam.id };
+            }
+            if (removedUserIds.includes(u.id)) {
+                // This user was removed from the team, so unassign them.
+                return { ...u, teamId: undefined };
+            }
             return u;
-        }));
+        });
+        setUsers(newUsers);
+
+        // Now, resynchronize ALL teams based on the updated users list.
+        // This ensures that a user moved from Team A to Team B is removed from Team A's member list.
+        const newTeams = teams.map(t => {
+            // For the team being edited, use the new data from the modal.
+            if (t.id === updatedTeam.id) {
+                return {
+                    ...updatedTeam,
+                    members: newUsers.filter(u => updatedMemberIds.has(u.id))
+                };
+            }
+            // For all other teams, just refilter their members to reflect any changes.
+            return {
+                ...t,
+                members: newUsers.filter(u => u.teamId === t.id)
+            };
+        });
+        setTeams(newTeams);
+
         logAuditEvent('Team Updated', `Team ID: ${updatedTeam.id}`);
     };
+
+    const handleAssignUserToTeam = (userId: number, teamId: number) => {
+        // 1. Update the user's teamId in the master user list. This is the source of truth.
+        const updatedUsers = users.map(u => 
+            u.id === userId ? { ...u, teamId } : u
+        );
+        setUsers(updatedUsers);
+
+        // 2. Re-synchronize ALL teams based on the updated users list.
+        // This correctly adds the user to the new team and removes them from any old one.
+        const updatedTeams = teams.map(team => ({
+            ...team,
+            members: updatedUsers.filter(u => u.teamId === team.id)
+        }));
+        setTeams(updatedTeams);
+
+        logAuditEvent('User Assigned to Team', `User ID: ${userId} to Team ID: ${teamId}`);
+    };
+
 
     const handleUpdateSchedule = (updatedSchedule: Schedule) => {
         setSchedule(updatedSchedule);
@@ -284,7 +333,7 @@ const App: React.FC = () => {
             case UserRole.EMT:
                 return <EmtDashboard user={loggedInUser} calls={calls} teams={teams} onFilePCR={(call) => { setCallToEdit(call); setView('filePCR'); }} onUpdateCallStatus={handleUpdateCallStatus} onUpdateUserStatus={handleUpdateUserStatus} isDarkMode={isDarkMode} />;
             case UserRole.SUPERVISOR:
-                return <SupervisorDashboard calls={calls} users={users} teams={teams} schedule={schedule} onUpdateTeam={handleUpdateTeam} onUpdateSchedule={handleUpdateSchedule} />;
+                return <SupervisorDashboard calls={calls} users={users} teams={teams} schedule={schedule} onUpdateTeam={handleUpdateTeam} onUpdateSchedule={handleUpdateSchedule} onAssignUserToTeam={handleAssignUserToTeam} />;
             case UserRole.COO:
                 return <COODashboard calls={calls} isDarkMode={isDarkMode} />;
             case UserRole.ADMIN:

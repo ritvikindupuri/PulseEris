@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { EmergencyCall, CallStatus, User, UserRole, Team, TeamGrade, TeamStatus, BaseStation, Schedule, EmtStatus } from '../types';
 import { ReportIcon } from './icons/ReportIcon';
@@ -7,6 +6,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { CalendarIcon } from './icons/CalendarIcon';
 import SchedulingTool from './SchedulingTool';
 import ExceptionReportModal from './ExceptionReportModal';
+import { AlertIcon } from './icons/AlertIcon';
 
 interface SupervisorDashboardProps {
   calls: EmergencyCall[];
@@ -15,15 +15,17 @@ interface SupervisorDashboardProps {
   schedule: Schedule;
   onUpdateTeam: (team: Team) => void;
   onUpdateSchedule: (schedule: Schedule) => void;
+  onAssignUserToTeam: (userId: number, teamId: number) => void;
 }
 
-const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users, teams, schedule, onUpdateTeam, onUpdateSchedule }) => {
+const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users, teams, schedule, onUpdateTeam, onUpdateSchedule, onAssignUserToTeam }) => {
   const [gradeFilter, setGradeFilter] = useState<TeamGrade | 'all'>('all');
   const [baseStationFilter, setBaseStationFilter] = useState<BaseStation | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<EmtStatus | 'all'>('all');
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [showScheduler, setShowScheduler] = useState(false);
   const [showExceptionReport, setShowExceptionReport] = useState(false);
+  const [assigningUser, setAssigningUser] = useState<User | null>(null);
 
   const stats = useMemo(() => ({
     totalCalls: calls.length,
@@ -40,6 +42,10 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
       (statusFilter === 'all' || team.members.some(member => member.status === statusFilter))
     );
   }, [teams, gradeFilter, baseStationFilter, statusFilter]);
+  
+  const unassignedEmts = useMemo(() => {
+    return users.filter(u => u.role === UserRole.EMT && (u.teamId === undefined || u.teamId === null));
+  }, [users]);
 
   const openIncidents = useMemo(() => {
     return calls.filter(c => c.status !== CallStatus.COMPLETED && c.status !== CallStatus.CANCELLED);
@@ -99,6 +105,13 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
     onUpdateSchedule(updatedSchedule);
     setShowScheduler(false);
   };
+  
+  const handleSaveAssignment = (teamId: number) => {
+    if (assigningUser && teamId) {
+        onAssignUserToTeam(assigningUser.id, teamId);
+        setAssigningUser(null);
+    }
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
@@ -117,6 +130,28 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
           <StatCard title="Total Personnel" value={stats.totalPersonnel} />
           <StatCard title="Teams on Duty" value={stats.teamsOnDuty} />
       </div>
+      
+      {unassignedEmts.length > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600 rounded-lg p-4 mb-8 shadow-md">
+            <div className="flex items-center gap-3">
+                <AlertIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                <div>
+                    <h3 className="font-bold text-lg text-yellow-800 dark:text-yellow-200">Action Required: Unassigned Personnel</h3>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300">The following EMTs need to be assigned to a team to become operational.</p>
+                </div>
+            </div>
+            <ul className="mt-3 divide-y divide-yellow-200 dark:divide-yellow-800">
+                {unassignedEmts.map(user => (
+                    <li key={user.id} className="flex justify-between items-center py-2">
+                        <span className="text-gray-800 dark:text-gray-200 font-medium">{user.username}</span>
+                        <button onClick={() => setAssigningUser(user)} className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-3 rounded-md shadow-sm transition-colors">
+                            Assign...
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Team Management */}
@@ -209,12 +244,19 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
                       <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Members</label>
                           <div className="mt-2 grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border border-gray-300 dark:border-gray-600 rounded-md">
-                            {users.filter(u => u.role === UserRole.EMT && (u.teamId === undefined || u.teamId === editingTeam.id)).map(user => (
-                                <label key={user.id} className="flex items-center space-x-2 text-sm">
-                                    <input type="checkbox" checked={editingTeam.members.some(m => m.id === user.id)} onChange={e => handleMemberChange(user.id, e.target.checked)} />
-                                    <span>{user.username}</span>
-                                </label>
-                            ))}
+                            {users.filter(u => u.role === UserRole.EMT).map(user => {
+                                const isAssignedToOtherTeam = user.teamId !== undefined && user.teamId !== editingTeam.id;
+                                const otherTeam = teams.find(t => t.id === user.teamId);
+                                return (
+                                    <label key={user.id} className="flex items-center space-x-2 text-sm text-gray-800 dark:text-gray-200">
+                                        <input type="checkbox" checked={editingTeam.members.some(m => m.id === user.id)} onChange={e => handleMemberChange(user.id, e.target.checked)} />
+                                        <span>
+                                            {user.username}
+                                            {isAssignedToOtherTeam && otherTeam && <span className="text-xs text-gray-400 ml-1">({otherTeam.name})</span>}
+                                        </span>
+                                    </label>
+                                );
+                            })}
                           </div>
                       </div>
                   </div>
@@ -228,6 +270,7 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ calls, users,
         
       {showScheduler && <SchedulingTool schedule={schedule} teams={teams} onSave={handleSaveSchedule} onCancel={() => setShowScheduler(false)} />}
       {showExceptionReport && <ExceptionReportModal openIncidents={openIncidents} teams={teams} onClose={() => setShowExceptionReport(false)} onExport={handleExport} />}
+      {assigningUser && <AssignUserToTeamModal user={assigningUser} teams={teams} onSave={handleSaveAssignment} onCancel={() => setAssigningUser(null)} />}
     </div>
   );
 };
@@ -238,5 +281,49 @@ const StatCard: React.FC<{title: string; value: string | number}> = ({title, val
         <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
     </div>
 );
+
+const AssignUserToTeamModal: React.FC<{
+    user: User;
+    teams: Team[];
+    onSave: (teamId: number) => void;
+    onCancel: () => void;
+}> = ({ user, teams, onSave, onCancel }) => {
+    const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+
+    const handleSaveClick = () => {
+        if (selectedTeamId) {
+            onSave(parseInt(selectedTeamId, 10));
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold mb-1 text-gray-900 dark:text-gray-100">Assign Personnel</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Assign <span className="font-semibold">{user.username}</span> to a team.</p>
+                
+                <div>
+                    <label htmlFor="team-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Team</label>
+                    <select 
+                        id="team-select"
+                        value={selectedTeamId}
+                        onChange={e => setSelectedTeamId(e.target.value)}
+                        className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                        <option value="" disabled>Select a team...</option>
+                        {teams.map(team => (
+                            <option key={team.id} value={team.id}>{team.name} ({team.grade})</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={onCancel} className="py-2 px-4 bg-gray-200 dark:bg-gray-600 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">Cancel</button>
+                    <button onClick={handleSaveClick} disabled={!selectedTeamId} className="py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition">Save Assignment</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default SupervisorDashboard;
