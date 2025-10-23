@@ -1,7 +1,8 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { EmergencyCall } from '../types';
 import { ReportIcon } from './icons/ReportIcon';
+import { GoogleGenAI } from "@google/genai";
+import { SparklesIcon } from './icons/SparklesIcon';
 
 interface EODReportModalProps {
     calls: EmergencyCall[];
@@ -9,12 +10,16 @@ interface EODReportModalProps {
 }
 
 const EODReportModal: React.FC<EODReportModalProps> = ({ calls, onClose }) => {
-    
-    const reportStats = useMemo(() => {
+    const [aiInsights, setAiInsights] = useState('');
+    const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+
+    const todaysCalls = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        return calls.filter(c => c.timestamp >= today);
+    }, [calls]);
 
-        const todaysCalls = calls.filter(c => c.timestamp >= today);
+    const reportStats = useMemo(() => {
         const dispatchedToday = todaysCalls.filter(c => c.dispatchTimestamp);
 
         const priorityCounts = todaysCalls.reduce((acc, call) => {
@@ -34,7 +39,35 @@ const EODReportModal: React.FC<EODReportModalProps> = ({ calls, onClose }) => {
             priorityCounts,
             avgDispatchMin,
         };
-    }, [calls]);
+    }, [todaysCalls]);
+
+    const handleGenerateInsights = async () => {
+        if (todaysCalls.length === 0) {
+            setAiInsights("No calls today to analyze.");
+            return;
+        }
+        setIsGeneratingInsights(true);
+        setAiInsights('');
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const callDataSummary = todaysCalls.map(c => 
+                `Call at ${c.timestamp.toLocaleTimeString()} to ${c.location} for "${c.description}", Priority ${c.priority}, Status ${c.status}.`
+            ).join('\n');
+    
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-pro",
+                contents: `You are an EMS operations analyst. Analyze the following call data for the day and provide a brief summary with 2-3 key insights. Look for trends, geographic clusters of incidents, unusual patterns in call types or priorities, and suggest one operational improvement. Keep the response concise and in markdown format. Data:\n${callDataSummary}`
+            });
+    
+            setAiInsights(response.text);
+    
+        } catch (error) {
+            console.error("Error generating insights:", error);
+            setAiInsights("Error: Could not generate insights.");
+        } finally {
+            setIsGeneratingInsights(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -74,6 +107,22 @@ const EODReportModal: React.FC<EODReportModalProps> = ({ calls, onClose }) => {
                         <span className="font-semibold">Avg. Dispatch Time:</span>
                         <span className="text-xl font-bold">{reportStats.avgDispatchMin} min</span>
                     </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t dark:border-gray-600">
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-semibold text-gray-800 dark:text-gray-200">AI-Powered Insights</h4>
+                        <button type="button" onClick={handleGenerateInsights} disabled={isGeneratingInsights} className="flex items-center gap-1 text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-1 px-2 rounded-md shadow-sm transition-colors disabled:opacity-50">
+                            {isGeneratingInsights ? <SparklesIcon className="h-3 w-3 animate-spin"/> : <SparklesIcon className="h-3 w-3" />}
+                            {isGeneratingInsights ? 'Analyzing...' : 'Analyze'}
+                        </button>
+                    </div>
+                    {isGeneratingInsights && <p className="text-sm text-center text-gray-500 dark:text-gray-400 mt-2">Generating analysis...</p>}
+                    {aiInsights && (
+                        <div className="mt-2 p-3 text-sm bg-gray-50 dark:bg-gray-700/40 rounded-md text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                            {aiInsights}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex justify-end mt-6">

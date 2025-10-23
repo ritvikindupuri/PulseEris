@@ -1,5 +1,7 @@
 {
   "name": "PulsePoint ERIS",
   "description": "A professional-grade Emergency Response Information System for logging calls, dispatching teams, and managing incidents.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
@@ -244,9 +245,8 @@ const App: React.FC = () => {
     const handleFilePCRSubmit = (pcrData: Omit<PatientCareRecord, 'id' | 'callId'>) => {
         if (!callToEdit) return;
         const newPcr: PatientCareRecord = {
-            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
-            // FIX: Explicitly typing reduce arguments to resolve potential type inference issue with empty arrays.
-            id: pcrs.map(p => p.id).reduce((maxId: number, currentId: number) => Math.max(maxId, currentId), 0) + 1,
+            // FIX: Refactored to use reduce directly on the pcrs array and ensured explicit types for the callback arguments to prevent type inference issues on empty arrays.
+            id: pcrs.reduce((maxId: number, p: PatientCareRecord) => Math.max(maxId, p.id), 0) + 1,
             callId: callToEdit.id,
             ...pcrData,
         };
@@ -263,8 +263,10 @@ const App: React.FC = () => {
         const originalMemberIds = new Set(originalTeam.members.map(m => m.id));
         const updatedMemberIds = new Set(updatedTeam.members.map(m => m.id));
 
-        const addedUserIds = [...updatedMemberIds].filter(id => !originalMemberIds.has(id));
-        const removedUserIds = [...originalMemberIds].filter(id => !updatedMemberIds.has(id));
+        // FIX: Explicitly type `id` as a number in the filter callback to resolve a type inference issue where it was being treated as 'unknown', causing an error with `Set.has()`.
+        const addedUserIds = [...updatedMemberIds].filter((id: number) => !originalMemberIds.has(id));
+        // FIX: Explicitly type `id` as a number in the filter callback to resolve a type inference issue where it was being treated as 'unknown', causing an error with `Set.has()`.
+        const removedUserIds = [...originalMemberIds].filter((id: number) => !updatedMemberIds.has(id));
 
         // First, update the single source of truth for assignments: the users array.
         const newUsers = users.map(u => {

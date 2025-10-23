@@ -14,7 +14,11 @@ PulsePoint ERIS is architected as a **client-side, single-page application (SPA)
 -   **TypeScript:** Provides static typing for improved code quality, developer experience, and maintainability.
 -   **Tailwind CSS:** A utility-first CSS framework used for rapid and consistent styling, including responsive design and dark mode.
 -   **Chart.js:** A charting library used to render data visualizations in the EMT, Supervisor, and COO dashboards.
--   **@google/genai (Gemini API):** Integrated to provide AI-powered priority suggestions for new emergency calls based on their description.
+-   **@google/genai (Gemini API):** Integrated to provide a suite of AI-powered features:
+    -   **`gemini-2.5-flash`:** For fast, general-purpose tasks like initial call priority suggestion and generating shift handover summaries.
+    -   **`gemini-2.5-flash` with Google Maps Grounding:** To provide real-world, up-to-date geographical context for incident locations.
+    -   **`gemini-2.5-flash-lite`:** For extremely low-latency tasks, such as the real-time AI Scribe for EMTs.
+    -   **`gemini-2.5-pro`:** For more complex reasoning and analytical tasks, such as generating qualitative insights for the End of Day report.
 
 ### 1.2. Rendered Architecture Diagram
 
@@ -59,9 +63,15 @@ graph TD;
 
         subgraph "Component Interactions";
             D_Dash -- Renders --> LiveMap[LiveMapPanel];
+            D_Dash -- Renders --> EODModal[EODReportModal];
             E_Dash -- Renders --> Charts[ShiftSummaryCharts];
             S_Dash -- Renders --> Scheduler[SchedulingTool];
+            S_Dash -- Renders --> ExceptionModal[ExceptionReportModal];
+
             LogCall -- Calls --> Gemini[Gemini API];
+            FilePCR -- Calls --> Gemini;
+            EODModal -- Calls --> Gemini;
+            ExceptionModal -- Calls --> Gemini;
         end;
     end;
 
@@ -115,7 +125,11 @@ graph LR
         UC15(View Shift Analytics)
         UC16(Export Incident Data)
 
-        UC1 -- "uses" --> Gemini(AI Priority Suggestion)
+        UC1 -- "uses" --> AI_Priority(AI Priority Suggestion)
+        UC1 -- "uses" --> AI_Maps(AI Location Intelligence)
+        UC4 -- "uses" --> AI_Analysis(AI Operational Analysis)
+        UC6 -- "uses" --> AI_Scribe(AI Narrative Scribe)
+        UC10 -- "uses" --> AI_Handover(AI Handover Summary)
     end
     
     Dispatcher -- "Manages" --> UC1;
@@ -176,46 +190,98 @@ The root component and central nervous system of the application. It is responsi
 -   Rendering the correct view or dashboard based on the `view` and `loggedInUser` state.
 
 ### Role-Based Dashboards
--   **`DispatcherDashboard.tsx`**: A feature-rich interface displaying pending incidents, available teams, and the `LiveMapPanel`. It uses `React.useMemo` to efficiently filter and sort calls. It also provides entry points for logging new calls and generating an EOD report.
--   **`EmtDashboard.tsx`**: A streamlined view focused on the EMT's single active assignment. It features clear action buttons to update their status throughout the call lifecycle and includes the `ShiftSummaryCharts` component.
--   **`SupervisorDashboard.tsx`**: An operational overview dashboard with KPI cards, a filterable team roster, and access to the `SchedulingTool` and `ExceptionReportModal`.
--   **`COODashboard.tsx`**: An executive-level dashboard focused on analytics. It calculates and displays Service Level Agreement (SLA) metrics and visualizes compliance.
--   **`AdminDashboard.tsx`**: A simple interface for viewing the immutable `auditLog` and performing system-level actions.
+-   **`DispatcherDashboard.tsx`**: A feature-rich interface displaying pending incidents, available teams, and the `LiveMapPanel`. It provides entry points for logging new calls and generating an `EODReportModal`.
+-   **`EmtDashboard.tsx`**: A streamlined view focused on the EMT's active assignment. It features clear action buttons and access to the `PatientCareRecordForm` which contains the AI Scribe.
+-   **`SupervisorDashboard.tsx`**: An operational overview with KPI cards, a filterable team roster, and access to the `SchedulingTool` and `ExceptionReportModal`.
+-   **`COODashboard.tsx`**: An executive-level dashboard focused on Service Level Agreement (SLA) analytics.
+-   **`AdminDashboard.tsx`**: A simple interface for viewing the immutable `auditLog`.
 
 ### Key UI & Logic Components
--   **`LiveMapPanel.tsx`**: A simulation of a real-time map. It uses `React.useState` and `useEffect` with a `setInterval` to manage the positions of team and incident icons. The logic moves dispatched teams towards their target and makes available teams "patrol" randomly.
--   **`LogCallForm.tsx`**: A controlled form for entering new incident details. It features a debounced `useEffect` hook to call the Gemini API for priority suggestions.
--   **`SchedulingTool.tsx`**: A modal overlay with a table-based UI for assigning teams to weekly shifts. It manages its own local copy of the schedule state until the user saves, preventing re-renders of the entire app on each change.
--   **`EODReportModal.tsx` & `ExceptionReportModal.tsx`**: These components receive data as props and use `React.useMemo` to calculate and display summary statistics for their respective reports.
+-   **`LogCallForm.tsx`**: A controlled form for entering new incident details. It integrates two Gemini features: a debounced `useEffect` hook for priority suggestions and an on-demand function for location intelligence using Maps Grounding.
+-   **`PatientCareRecordForm.tsx`**: A form for EMTs to file reports. It includes an "AI Scribe" feature that calls the `gemini-2.5-flash-lite` model to generate a narrative from raw notes.
+-   **`EODReportModal.tsx` & `ExceptionReportModal.tsx`**: These components display summary statistics and include buttons that trigger Gemini API calls (`gemini-2.5-pro` for deep analysis, `gemini-2.5-flash` for summarization) to provide qualitative insights.
+-   **`LiveMapPanel.tsx`**: A simulation of a real-time map using `useEffect` with a `setInterval` to manage the positions of team and incident icons.
+-   **`SchedulingTool.tsx`**: A modal overlay for assigning teams to weekly shifts. It manages its own local copy of the schedule state to prevent re-renders on each change.
 
-## 5. Key Workflows & Business Logic
+## 5. Key Workflow Diagrams
 
-### 5.1. AI-Powered Priority Suggestion
--   **Trigger**: The `LogCallForm` component observes changes to the `description` text area.
--   **Debounce**: To avoid excessive API calls, a `setTimeout` function creates a 1-second delay. If the user continues typing, the previous timeout is cleared.
--   **API Call**: Once the user pauses, an asynchronous call is made to the Gemini API (`gemini-2.5-flash` model).
--   **Prompt Engineering**: The prompt provides the model with clear context and instructions to classify the description into one of four priority levels and to respond with only a single digit.
--   **State Update**: The response is parsed, and if valid, the form's `priority` state is updated, changing the selection in the dropdown menu. The dispatcher can still override this suggestion manually.
+### 5.1. AI-Assisted Call Logging – Dispatcher Flow
 
-### 5.2. Team & Schedule Management
--   A supervisor can edit a team's roster via a modal. The `handleUpdateTeam` function in `App.tsx` receives the entire updated team object. It then updates the `teams` state and also iterates through the `users` state to update the `teamId` for any members who were added or removed.
+This diagram illustrates the step-by-step process a dispatcher follows to log a new call, highlighting the interaction with the AI-powered system components.
+
+```mermaid
+activityDiagram
+    title "AI-Assisted Call Logging – Dispatcher Flow"
+    
+    |Dispatcher|
+    start
+    :Incoming emergency call received;
+    :Click 'Log New Call';
+    :Enter caller info and incident description;
+    if (All required fields filled?) then (Yes)
+        |System|
+        :Invoke Gemini model for priority suggestion;
+        :Display suggested priority to dispatcher;
+        |Dispatcher|
+        if (Accept AI suggestion?) then (Yes)
+            'Continue';
+        else (No)
+            :Manually choose priority;
+        endif
+        |System|
+        :Check duplicates in CallDB;
+        if (Duplicate Found?) then (Yes)
+            :Prompt link to existing record;
+            note right: Linked
+            end
+        else (No)
+            :Save new call record and show confirmation;
+            note right: Call logged successfully
+            end
+        endif
+    else (No)
+        :Display validation error;
+        -> Enter caller info and incident description;
+    endif
+```
+
+## 6. Key Workflows & Business Logic
+
+### 6.1. AI-Powered Workflows
+The application integrates Gemini in four key areas to enhance user capabilities.
+
+1.  **AI Priority Suggestion (`LogCallForm`)**
+    -   **Trigger**: A `useEffect` hook observes changes to the `description` field.
+    -   **Logic**: A 1-second debounce (`setTimeout`) prevents excessive API calls. The `gemini-2.5-flash` model is prompted with instructions to classify the description into a priority level from 1-4 and respond with a single digit.
+    -   **Result**: The form's `priority` state is updated, which the dispatcher can override.
+
+2.  **AI Location Intelligence (`LogCallForm`)**
+    -   **Trigger**: User clicks the "Verify Location" button.
+    -   **Logic**: The app requests the user's `navigator.geolocation`. An API call is made to `gemini-2.5-flash` with the `googleMaps` tool enabled, passing the address and optionally the user's coordinates. The prompt asks for access challenges and nearby hospitals.
+    -   **Result**: The model's text response and any associated map links from the `groundingChunks` are displayed below the location input.
+
+3.  **Low-Latency AI Scribe (`PatientCareRecordForm`)**
+    -   **Trigger**: EMT clicks the "Generate with AI" button.
+    -   **Logic**: The content from the Vitals, Treatments, Medications, and Notes fields is compiled into a single string. A prompt is sent to the `gemini-2.5-flash-lite` model, instructing it to act as an expert paramedic and convert the notes into a professional PCR narrative.
+    -   **Result**: The generated text populates a read-only "AI Generated Narrative" text area, which the EMT can reference.
+
+4.  **AI Analysis & Summarization (`EODReportModal`, `ExceptionReportModal`)**
+    -   **Trigger**: User clicks the "Analyze" or "Generate AI Handover Summary" button.
+    -   **Logic**: Relevant data (daily calls or open incidents) is summarized into a text block. This context is sent to the Gemini API with a role-specific prompt (e.g., "act as an EMS analyst" or "act as a shift supervisor").
+    -   **Models**: `gemini-2.5-pro` is used for the EOD report for deeper analysis, while the faster `gemini-2.5-flash` is used for the handover summary.
+    -   **Result**: The formatted text response is displayed in a designated area within the modal.
+
+### 6.2. Team & Schedule Management
+-   A supervisor can edit a team's roster via a modal. The `handleUpdateTeam` function in `App.tsx` receives the updated team object. It then updates the `teams` state and also iterates through the `users` state to update the `teamId` for any members who were added or removed, maintaining a single source of truth.
 -   The weekly schedule is managed similarly. The `SchedulingTool` works on a local copy of the schedule. When saved, the entire updated schedule object is passed to `handleUpdateSchedule` in `App.tsx`, which replaces the old schedule in the main state.
 
-### 5.3. Analytics & Reporting
--   All analytics are calculated on the client-side using `React.useMemo` for efficiency.
--   **COO Dashboard:** The `slaStats` calculation filters for completed calls with all necessary timestamps, then iterates through them to calculate averages and the percentage of calls that fall within the defined `SLAMinutes`.
--   **EOD Report:** The `reportStats` calculation filters calls for the current day and then computes totals and averages.
--   This client-side approach is suitable for a demo but would be moved to a backend service in a production environment for performance and scalability.
+### 6.3. Auditing
+-   The `logAuditEvent` function in `App.tsx` is a centralized utility for recording actions. It is called from within other state-updating functions (e.g., `handleLogin`, `handleAssignTeam`). It constructs a new log entry and prepends it to the `auditLog` state array, ensuring the log is always displayed in reverse chronological order.
 
-### 5.4. Auditing
--   The `logAuditEvent` function in `App.tsx` is a centralized utility for recording actions.
--   It is called from within other state-updating functions (e.g., `handleLogin`, `handleAssignTeam`).
--   It constructs a new log entry with a timestamp, the current user's name, and the action details, then prepends it to the `auditLog` state array, ensuring the log is always displayed in reverse chronological order.
+## 7. Non-Functional Requirements
 
-## 6. Non-Functional Requirements
-
--   **Performance**: `React.useMemo` is used extensively in dashboards to memoize filtered and sorted lists, preventing costly re-calculations on every render. The `LiveMapPanel` simulation is managed by a single `setInterval` to avoid performance issues.
--   **Accessibility (A11y)**: The application incorporates semantic HTML elements, ARIA roles (e.g., `role="alert"`), `htmlFor` attributes in labels, and ensures interactive elements are keyboard-focusable.
+-   **Performance**: `React.useMemo` is used extensively in dashboards to memoize filtered and sorted lists, preventing costly re-calculations on every render. The choice of specific Gemini models (e.g., `flash-lite` for the scribe) is a performance optimization for user experience.
+-   **Accessibility (A11y)**: The application incorporates semantic HTML, ARIA roles, `htmlFor` attributes, and ensures interactive elements are keyboard-focusable.
 -   **Responsiveness**: Tailwind CSS's mobile-first utility classes are used to ensure the layout adapts seamlessly from large desktop monitors to mobile devices.
 -   **Security**: As a frontend-only application, security is limited. In a production environment, this would be expanded to include:
     -   **Authentication**: Using JWTs (JSON Web Tokens) exchanged with a secure backend.
@@ -223,15 +289,13 @@ The root component and central nervous system of the application. It is responsi
     -   **Transport Security**: All API communication would be over HTTPS.
     -   **Input Sanitization**: Backend validation would be the source of truth to prevent injection attacks.
 
-## 7. Conclusion & Future Work
+## 8. Conclusion & Future Work
 
-PulsePoint ERIS currently stands as a high-fidelity, feature-complete prototype that demonstrates the core workflows of a modern Emergency Response Information System. Its robust, role-based architecture and clean, responsive UI successfully meet the initial design goals, showcasing the power of a modern frontend stack combined with AI integration.
+PulsePoint ERIS currently stands as a high-fidelity, feature-complete prototype that demonstrates the core workflows of a modern, AI-enhanced Emergency Response Information System. Its robust, role-based architecture and clean, responsive UI successfully meet the initial design goals.
 
-The current implementation, while fully interactive, operates on local, ephemeral state. The logical next phase is to evolve the application into a production-ready, multi-user system. The roadmap includes:
+The logical next phase is to evolve the application into a production-ready, multi-user system. The roadmap includes:
 
-1.  **Backend Integration:** Develop a robust backend service (e.g., using Node.js, Python, or Go) to manage a persistent database (e.g., PostgreSQL). This will be the source of truth for all application data.
-2.  **Real-Time Communication:** Replace the `setInterval` map simulation with a real-time solution using WebSockets. This will allow for instantaneous updates across all connected clients when a call is logged, a team's status changes, or a unit's location is updated.
-3.  **Authentication & Security:** Implement a secure authentication system using JWTs. The backend will enforce all business logic and role-based permissions, ensuring data integrity and security.
+1.  **Backend Integration:** Develop a robust backend service (e.g., using Node.js, Python, or Go) to manage a persistent database (e.g., PostgreSQL).
+2.  **Real-Time Communication:** Replace the `setInterval` map simulation with a real-time solution using WebSockets for instantaneous updates across all connected clients.
+3.  **Authentication & Security:** Implement a secure authentication system using JWTs.
 4.  **Scalability & Deployment:** Containerize the application using Docker for consistent, scalable deployments on cloud platforms.
-
-With this solid foundation, PulsePoint ERIS is well-positioned for future expansion into more advanced areas such as predictive analytics for call volume, resource allocation optimization, and dedicated mobile applications for field personnel.

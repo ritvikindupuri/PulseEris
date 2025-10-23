@@ -13,6 +13,7 @@ interface LoginPageProps {
 
 const DEMO_ACCOUNTS = [
     { role: UserRole.DISPATCHER, username: 'dispatch1', password: 'password', description: 'Logs calls and manages units on a live map.' },
+    { role: UserRole.EMT, username: 'emt1', password: 'password', description: 'Views assigned incidents and files patient reports.' },
     { role: UserRole.SUPERVISOR, username: 'supervisor1', password: 'password', description: 'Manages team rosters and weekly schedules.' },
 ];
 

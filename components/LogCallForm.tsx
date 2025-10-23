@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { EmergencyCall, Priority } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { SparklesIcon } from './icons/SparklesIcon';
+import { MapPinIcon } from './icons/MapPinIcon';
 
 type CallFormData = Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTo'>;
 
@@ -21,6 +22,9 @@ const LogCallForm: React.FC<LogCallFormProps> = ({ onSubmit, onCancel }) => {
   });
   const [isSuggesting, setIsSuggesting] = useState(false);
   const debounceTimeout = useRef<number | null>(null);
+  const [locationContext, setLocationContext] = useState<{ text: string; links: {uri: string, title: string}[] } | null>(null);
+  const [isVerifyingLocation, setIsVerifyingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const fetchPrioritySuggestion = async (description: string) => {
     if (description.trim().length < 10) { // Don't run on very short descriptions
@@ -81,12 +85,72 @@ const LogCallForm: React.FC<LogCallFormProps> = ({ onSubmit, onCancel }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: name === 'priority' ? parseInt(value) : value }));
+     if (name === 'location') {
+        setLocationContext(null);
+        setLocationError(null);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
   };
+
+  const handleVerifyLocation = async () => {
+    if (!formData.location) {
+        setLocationError("Please enter a location first.");
+        return;
+    }
+    setIsVerifyingLocation(true);
+    setLocationContext(null);
+    setLocationError(null);
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        let userPosition: { latitude: number, longitude: number } | null = null;
+        try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+            });
+            userPosition = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+            };
+        } catch (geoError) {
+            console.warn("Could not get user's geolocation.", geoError);
+        }
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `For the emergency location "${formData.location}", provide a quick summary of potential access challenges for an ambulance and list the nearest hospitals.`,
+            config: {
+                tools: [{googleMaps: {}}],
+                ...(userPosition && { 
+                    toolConfig: { 
+                        retrievalConfig: { 
+                            latLng: userPosition 
+                        } 
+                    } 
+                })
+            },
+        });
+
+        const text = response.text;
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        const links = groundingChunks
+            .map((chunk: any) => chunk.maps ? ({ uri: chunk.maps.uri, title: chunk.maps.title }) : null)
+            .filter((link): link is {uri: string, title: string} => link !== null);
+
+        setLocationContext({ text, links });
+
+    } catch (error) {
+        console.error("Error verifying location:", error);
+        setLocationError("Could not retrieve location context. Please try again.");
+    } finally {
+        setIsVerifyingLocation(false);
+    }
+};
 
   return (
     <div className="container mx-auto mt-10 p-6">
@@ -106,7 +170,30 @@ const LogCallForm: React.FC<LogCallFormProps> = ({ onSubmit, onCancel }) => {
 
           <div className="mt-6">
             <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Location</label>
-            <input type="text" name="location" id="location" value={formData.location} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-200"/>
+             <div className="relative mt-1">
+                <input type="text" name="location" id="location" value={formData.location} onChange={handleChange} required className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-200 pr-10"/>
+                <button type="button" onClick={handleVerifyLocation} disabled={isVerifyingLocation} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-blue-500 disabled:opacity-50">
+                    {isVerifyingLocation ? <SparklesIcon className="h-5 w-5 animate-pulse text-blue-500" /> : <MapPinIcon className="h-5 w-5" />}
+                </button>
+            </div>
+            {locationError && <p className="mt-2 text-xs text-red-500">{locationError}</p>}
+            {locationContext && (
+                <div className="mt-2 p-3 bg-blue-50 dark:bg-gray-700/50 rounded-md border border-blue-200 dark:border-gray-600">
+                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{locationContext.text}</p>
+                    {locationContext.links.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-gray-600">
+                            <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400">Related Places:</h4>
+                            <ul className="list-disc list-inside text-xs mt-1 space-y-1">
+                                {locationContext.links.map((link, index) => (
+                                    <li key={index}>
+                                        <a href={link.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{link.title}</a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
 
           <div className="mt-6">

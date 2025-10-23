@@ -1,8 +1,9 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { EmergencyCall, Team } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { AlertIcon } from './icons/AlertIcon';
+import { GoogleGenAI } from "@google/genai";
+import { SparklesIcon } from './icons/SparklesIcon';
 
 interface ExceptionReportModalProps {
     openIncidents: EmergencyCall[];
@@ -12,6 +13,8 @@ interface ExceptionReportModalProps {
 }
 
 const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openIncidents, teams, onClose, onExport }) => {
+    const [handoverSummary, setHandoverSummary] = useState('');
+    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
     
     const calculateAge = (timestamp: Date): string => {
         const diffMs = new Date().getTime() - timestamp.getTime();
@@ -21,6 +24,35 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
         return `${diffHours}h`;
     }
 
+    const handleGenerateSummary = async () => {
+        if (openIncidents.length === 0) {
+            setHandoverSummary("No open incidents for summary.");
+            return;
+        }
+        setIsGeneratingSummary(true);
+        setHandoverSummary('');
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const incidentDataSummary = openIncidents.map(c => {
+                const teamName = teams.find(t => t.id === c.assignedTeamId)?.name || 'Unassigned';
+                return `- P${c.priority} at ${c.location} (${c.status}) assigned to ${teamName}. Age: ${calculateAge(c.timestamp)}. Desc: ${c.description}`;
+            }).join('\n');
+    
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `You are a shift supervisor for an EMS team. Based on the following list of open incidents, write a brief, actionable handover summary for the next shift supervisor. Use bullet points. Highlight high-priority calls and any calls that have been open for a long time.\n\nIncidents:\n${incidentDataSummary}`
+            });
+    
+            setHandoverSummary(response.text);
+        } catch (error) {
+            console.error("Error generating summary:", error);
+            setHandoverSummary("Error: Could not generate summary.");
+        } finally {
+            setIsGeneratingSummary(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-2xl">
@@ -28,8 +60,21 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
                     <AlertIcon className="h-6 w-6 text-red-500" />
                     <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Shift Handover: Exception Report</h3>
                 </div>
+
+                <div className="mb-4">
+                    <button type="button" onClick={handleGenerateSummary} disabled={isGeneratingSummary || openIncidents.length === 0} className="w-full flex items-center justify-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-md shadow-sm transition-colors disabled:opacity-50">
+                        {isGeneratingSummary ? <SparklesIcon className="h-4 w-4 animate-spin"/> : <SparklesIcon className="h-4 w-4" />}
+                        {isGeneratingSummary ? 'Generating Summary...' : 'Generate AI Handover Summary'}
+                    </button>
+                    {handoverSummary && (
+                        <div className="mt-3 p-3 text-sm bg-indigo-50 dark:bg-gray-700 rounded-md text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                            <h4 className="font-bold mb-1">AI Summary:</h4>
+                            {handoverSummary}
+                        </div>
+                    )}
+                </div>
                 
-                <div className="space-y-4 my-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-4 my-4 max-h-[50vh] overflow-y-auto">
                     {openIncidents.length > 0 ? openIncidents.map(call => (
                          <div key={call.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                             <div className="flex justify-between items-start">
