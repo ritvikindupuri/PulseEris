@@ -1,14 +1,20 @@
-
 import React, { useState } from 'react';
 import { UserIcon } from './icons/UserIcon';
 import { LockIcon } from './icons/LockIcon';
 import { AlertIcon } from './icons/AlertIcon';
 import { Logo } from './icons/Logo';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { UserRole } from '../types';
 
 interface LoginPageProps {
   onLogin: (username: string, password_unused: string) => boolean;
   onNavigateToSignUp: () => void;
 }
+
+const DEMO_ACCOUNTS = [
+    { role: UserRole.DISPATCHER, username: 'dispatch1', password: 'password', description: 'Logs calls and manages units on a live map.' },
+    { role: UserRole.SUPERVISOR, username: 'supervisor1', password: 'password', description: 'Manages team rosters and weekly schedules.' },
+];
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToSignUp }) => {
   const [username, setUsername] = useState('');
@@ -27,8 +33,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToSignUp }) =>
     }
   };
 
+  const handlePopulateDemoCreds = (demoUser: string, demoPass: string) => {
+    setUsername(demoUser);
+    setPassword(demoPass);
+    setError('');
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 py-12">
       <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
         <div className="text-center mb-8">
             <Logo className="h-12 w-auto mx-auto text-red-600"/>
@@ -89,7 +101,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToSignUp }) =>
             </button>
           </div>
         </form>
-         <div className="text-center">
+         <div className="text-center mb-6">
             <p className="text-sm text-gray-600 dark:text-gray-400">
                 Don't have an account?{' '}
                 <button onClick={onNavigateToSignUp} className="font-medium text-blue-600 hover:text-blue-500">
@@ -97,6 +109,39 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onNavigateToSignUp }) =>
                 </button>
             </p>
         </div>
+        
+        <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or</span>
+            </div>
+        </div>
+
+        <div className="text-center">
+             <h3 className="text-md font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center justify-center gap-2">
+                <SparklesIcon className="h-5 w-5 text-indigo-400" />
+                Use a Demo Account
+            </h3>
+             <div className="space-y-2">
+                {DEMO_ACCOUNTS.map(({ role, username, password, description }) => (
+                    <button
+                        key={role}
+                        type="button"
+                        onClick={() => handlePopulateDemoCreds(username, password)}
+                        title={description}
+                        className="w-full text-left p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <p className="font-bold text-indigo-600 dark:text-indigo-400">Log in as {role}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            <span className="font-semibold">User:</span> {username} / <span className="font-semibold">Pass:</span> {password}
+                        </p>
+                    </button>
+                ))}
+             </div>
+        </div>
+
       </div>
     </div>
   );

@@ -1,15 +1,14 @@
-
 import { User, EmergencyCall, Team, UserRole, CallStatus, TeamStatus, TeamGrade, EmtStatus, Schedule, Day, BaseStation, AuditLogEntry } from './types';
 
 export const INITIAL_USERS: User[] = [
-  { id: 1, username: 'dispatch1', role: UserRole.DISPATCHER, status: null },
-  { id: 2, username: 'emt1', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 1 },
-  { id: 3, username: 'emt2', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 1 },
-  { id: 4, username: 'emt3', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 2 },
-  { id: 5, username: 'emt4', role: UserRole.EMT, status: EmtStatus.OFF_DUTY, teamId: 2 },
-  { id: 6, username: 'supervisor1', role: UserRole.SUPERVISOR, status: null },
-  { id: 7, username: 'coo1', role: UserRole.COO, status: null },
-  { id: 8, username: 'admin1', role: UserRole.ADMIN, status: null },
+  { id: 1, username: 'dispatch1', password: 'password', role: UserRole.DISPATCHER, status: null },
+  { id: 2, username: 'emt1', password: 'password', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 1 },
+  { id: 3, username: 'emt2', password: 'password', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 1 },
+  { id: 4, username: 'emt3', password: 'password', role: UserRole.EMT, status: EmtStatus.ON_DUTY, teamId: 2 },
+  { id: 5, username: 'emt4', password: 'password', role: UserRole.EMT, status: EmtStatus.OFF_DUTY, teamId: 2 },
+  { id: 6, username: 'supervisor1', password: 'password', role: UserRole.SUPERVISOR, status: null },
+  { id: 7, username: 'coo1', password: 'password', role: UserRole.COO, status: null },
+  { id: 8, username: 'admin1', password: 'password', role: UserRole.ADMIN, status: null },
 ];
 
 export const INITIAL_TEAMS: Team[] = [

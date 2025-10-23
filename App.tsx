@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
@@ -141,9 +140,9 @@ const App: React.FC = () => {
         setAuditLog(prev => [newLogEntry, ...prev]);
     };
 
-    const handleLogin = (username: string, password_unused: string): boolean => {
+    const handleLogin = (username: string, password_used: string): boolean => {
         const user = users.find(u => u.username === username);
-        if (user) {
+        if (user && user.password === password_used) {
             setLoggedInUser(user);
             setView('dashboard');
             logAuditEvent('User Login');
@@ -246,7 +245,8 @@ const App: React.FC = () => {
         if (!callToEdit) return;
         const newPcr: PatientCareRecord = {
             // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
-            id: pcrs.map(p => p.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
+            // FIX: Explicitly typing reduce arguments to resolve potential type inference issue with empty arrays.
+            id: pcrs.map(p => p.id).reduce((maxId: number, currentId: number) => Math.max(maxId, currentId), 0) + 1,
             callId: callToEdit.id,
             ...pcrData,
         };
