@@ -25,7 +25,6 @@ const COODashboard: React.FC<COODashboardProps> = ({ calls, isDarkMode }) => {
 
     const slaStats = useMemo(() => {
         if (completedCalls.length === 0) {
-            // FIX: Ensured return types are consistent (string) to prevent type errors.
             return {
                 avgDispatchMin: '0.0',
                 avgOnSceneMin: '0.0',

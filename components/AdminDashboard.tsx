@@ -2,6 +2,7 @@
 import React from 'react';
 import { AuditLogEntry } from '../types';
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
+import { DownloadIcon } from './icons/DownloadIcon';
 
 interface AdminDashboardProps {
     logs: AuditLogEntry[];
@@ -9,16 +10,42 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ logs, onBackup }) => {
+
+    const handleExport = () => {
+        const headers = "ID,Timestamp,User,Action,Details\n";
+        const csvData = logs.map(log => {
+            const details = `"${(log.details || '').replace(/"/g, '""')}"`;
+            return [log.id, log.timestamp.toISOString(), log.user, log.action, details].join(',');
+        }).join('\n');
+
+        const blob = new Blob([headers + csvData], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `pulsepoint_audit_log_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="container mx-auto p-4 md:p-6 lg:p-8">
             <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Admin Dashboard</h1>
-                <button 
-                    onClick={onBackup}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out"
-                >
-                    <ShieldCheckIcon /> Perform System Backup
-                </button>
+                <div className="flex gap-4">
+                    <button 
+                        onClick={handleExport}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out"
+                    >
+                        <DownloadIcon /> Export as CSV
+                    </button>
+                    <button 
+                        onClick={onBackup}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out"
+                    >
+                        <ShieldCheckIcon /> Perform System Backup
+                    </button>
+                </div>
             </header>
 
             <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">

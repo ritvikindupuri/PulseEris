@@ -58,7 +58,15 @@ const loadStateFromLocalStorage = () => {
         
         // PCRs
         const savedPcrs = localStorage.getItem(PCRS_STORAGE_KEY);
-        const pcrs: PatientCareRecord[] = savedPcrs ? JSON.parse(savedPcrs) : [];
+        let pcrs: PatientCareRecord[] = [];
+        if (savedPcrs) {
+            const parsedPcrs = JSON.parse(savedPcrs);
+            // Backwards compatibility for PCRs saved before sync feature
+            pcrs = parsedPcrs.map((pcr: any) => ({
+                ...pcr,
+                isSynced: pcr.isSynced === false ? false : true,
+            }));
+        }
 
         // Schedule
         const savedSchedule = localStorage.getItem(SCHEDULE_STORAGE_KEY);
@@ -101,6 +109,7 @@ const App: React.FC = () => {
 
     const [view, setView] = useState<AppView>('login');
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
+    const [isOnline, setIsOnline] = useState(true); // For offline simulation
     
     const [isDarkMode, setIsDarkMode] = useState<boolean>(initialState.isDarkMode);
     const [users, setUsers] = useState<User[]>(initialState.users);
@@ -130,6 +139,24 @@ const App: React.FC = () => {
     useEffect(() => { localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(schedule)); }, [schedule]);
     useEffect(() => { localStorage.setItem(AUDIT_LOG_STORAGE_KEY, JSON.stringify(auditLog)); }, [auditLog]);
 
+    // Effect for simulating PCR sync when coming back online
+    useEffect(() => {
+        if (isOnline) {
+            const unsyncedPcrs = pcrs.filter(p => !p.isSynced);
+            if (unsyncedPcrs.length > 0) {
+                console.log(`Syncing ${unsyncedPcrs.length} PCRs...`);
+                // Simulate a network delay
+                setTimeout(() => {
+                    setPcrs(prevPcrs => 
+                        prevPcrs.map(p => p.isSynced ? p : { ...p, isSynced: true })
+                    );
+                    logAuditEvent('System Sync', `${unsyncedPcrs.length} offline PCR(s) synced.`);
+                    // Here you could show a toast notification
+                }, 2000);
+            }
+        }
+    }, [isOnline]);
+
     const logAuditEvent = (action: string, details?: string) => {
         const newLogEntry: AuditLogEntry = {
             id: auditLog.length + 1,
@@ -157,10 +184,10 @@ const App: React.FC = () => {
             return false;
         }
         const newUser: User = { 
-            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
             id: users.map(u => u.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
             ...userData, 
             status: userData.role === UserRole.EMT ? EmtStatus.OFF_DUTY : null,
+            certifications: userData.role === UserRole.EMT ? [] : undefined,
         };
         setUsers(prev => [...prev, newUser]);
         setLoggedInUser(newUser);
@@ -177,7 +204,6 @@ const App: React.FC = () => {
 
     const handleLogCallSubmit = (callData: Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTeamId'>) => {
         const newCall: EmergencyCall = {
-            // FIX: Replaced Math.max with a safer reduce-based method to find the next available ID.
             id: calls.map(c => c.id).reduce((maxId, currentId) => Math.max(maxId, currentId), 0) + 1,
             ...callData,
             timestamp: new Date(),
@@ -201,7 +227,6 @@ const App: React.FC = () => {
             }
             return c;
         }));
-        // FIX: Using a more explicit check for teamId to ensure type safety, which resolves the type error.
         if (teamId !== undefined) {
             let teamStatus: TeamStatus;
             switch(status) {
@@ -242,20 +267,20 @@ const App: React.FC = () => {
         logAuditEvent('User Status Updated', `User ID: ${userId}, New Status: ${status}`);
     };
     
-    const handleFilePCRSubmit = (pcrData: Omit<PatientCareRecord, 'id' | 'callId'>) => {
+    const handleFilePCRSubmit = (pcrData: Omit<PatientCareRecord, 'id' | 'callId' | 'isSynced'>) => {
         if (!callToEdit) return;
         const newPcr: PatientCareRecord = {
-            // FIX: Refactored to use reduce directly on the pcrs array and ensured explicit types for the callback arguments to prevent type inference issues on empty arrays.
             id: pcrs.reduce((maxId: number, p: PatientCareRecord) => Math.max(maxId, p.id), 0) + 1,
             callId: callToEdit.id,
             ...pcrData,
+            isSynced: isOnline,
         };
         setPcrs(prev => [...prev, newPcr]);
         setCalls(prev => prev.map(c => c.id === callToEdit.id ? {...c, pcrId: newPcr.id} : c));
         setCallToEdit(null);
-        setConfirmationMessage('Patient Care Record filed successfully!');
+        setConfirmationMessage(isOnline ? 'Patient Care Record filed successfully!' : 'PCR saved locally! It will sync when you are back online.');
         setView('confirmation');
-        logAuditEvent('PCR Filed', `Call ID: ${callToEdit.id}`);
+        logAuditEvent('PCR Filed', `Call ID: ${callToEdit.id}. Status: ${isOnline ? 'Synced' : 'Offline'}`);
     };
     
     const handleUpdateTeam = (updatedTeam: Team) => {
@@ -263,36 +288,27 @@ const App: React.FC = () => {
         const originalMemberIds = new Set(originalTeam.members.map(m => m.id));
         const updatedMemberIds = new Set(updatedTeam.members.map(m => m.id));
 
-        // FIX: Explicitly type `id` as a number in the filter callback to resolve a type inference issue where it was being treated as 'unknown', causing an error with `Set.has()`.
         const addedUserIds = [...updatedMemberIds].filter((id: number) => !originalMemberIds.has(id));
-        // FIX: Explicitly type `id` as a number in the filter callback to resolve a type inference issue where it was being treated as 'unknown', causing an error with `Set.has()`.
         const removedUserIds = [...originalMemberIds].filter((id: number) => !updatedMemberIds.has(id));
 
-        // First, update the single source of truth for assignments: the users array.
         const newUsers = users.map(u => {
             if (addedUserIds.includes(u.id)) {
-                // This user was added to the team, so assign them. This handles re-assignments.
                 return { ...u, teamId: updatedTeam.id };
             }
             if (removedUserIds.includes(u.id)) {
-                // This user was removed from the team, so unassign them.
                 return { ...u, teamId: undefined };
             }
             return u;
         });
         setUsers(newUsers);
 
-        // Now, resynchronize ALL teams based on the updated users list.
-        // This ensures that a user moved from Team A to Team B is removed from Team A's member list.
         const newTeams = teams.map(t => {
-            // For the team being edited, use the new data from the modal.
             if (t.id === updatedTeam.id) {
                 return {
                     ...updatedTeam,
                     members: newUsers.filter(u => updatedMemberIds.has(u.id))
                 };
             }
-            // For all other teams, just refilter their members to reflect any changes.
             return {
                 ...t,
                 members: newUsers.filter(u => u.teamId === t.id)
@@ -304,14 +320,11 @@ const App: React.FC = () => {
     };
 
     const handleAssignUserToTeam = (userId: number, teamId: number) => {
-        // 1. Update the user's teamId in the master user list. This is the source of truth.
         const updatedUsers = users.map(u => 
             u.id === userId ? { ...u, teamId } : u
         );
         setUsers(updatedUsers);
 
-        // 2. Re-synchronize ALL teams based on the updated users list.
-        // This correctly adds the user to the new team and removes them from any old one.
         const updatedTeams = teams.map(team => ({
             ...team,
             members: updatedUsers.filter(u => u.teamId === team.id)
@@ -321,6 +334,10 @@ const App: React.FC = () => {
         logAuditEvent('User Assigned to Team', `User ID: ${userId} to Team ID: ${teamId}`);
     };
 
+    const handleUpdateUser = (updatedUser: User) => {
+        setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+        logAuditEvent('User Profile Updated', `User ID: ${updatedUser.id}`);
+    };
 
     const handleUpdateSchedule = (updatedSchedule: Schedule) => {
         setSchedule(updatedSchedule);
@@ -333,9 +350,9 @@ const App: React.FC = () => {
             case UserRole.DISPATCHER:
                 return <DispatcherDashboard calls={calls} teams={teams} onAssignTeam={handleAssignTeam} onUpdateCallStatus={handleUpdateCallStatus} onLogNewCall={() => setView('logCall')} />;
             case UserRole.EMT:
-                return <EmtDashboard user={loggedInUser} calls={calls} teams={teams} onFilePCR={(call) => { setCallToEdit(call); setView('filePCR'); }} onUpdateCallStatus={handleUpdateCallStatus} onUpdateUserStatus={handleUpdateUserStatus} isDarkMode={isDarkMode} />;
+                return <EmtDashboard user={loggedInUser} calls={calls} teams={teams} pcrs={pcrs} onFilePCR={(call) => { setCallToEdit(call); setView('filePCR'); }} onUpdateCallStatus={handleUpdateCallStatus} onUpdateUserStatus={handleUpdateUserStatus} isDarkMode={isDarkMode} isOnline={isOnline} />;
             case UserRole.SUPERVISOR:
-                return <SupervisorDashboard calls={calls} users={users} teams={teams} schedule={schedule} onUpdateTeam={handleUpdateTeam} onUpdateSchedule={handleUpdateSchedule} onAssignUserToTeam={handleAssignUserToTeam} />;
+                return <SupervisorDashboard calls={calls} pcrs={pcrs} users={users} teams={teams} schedule={schedule} onUpdateTeam={handleUpdateTeam} onUpdateSchedule={handleUpdateSchedule} onAssignUserToTeam={handleAssignUserToTeam} onUpdateUser={handleUpdateUser} isDarkMode={isDarkMode} />;
             case UserRole.COO:
                 return <COODashboard calls={calls} isDarkMode={isDarkMode} />;
             case UserRole.ADMIN:
@@ -368,7 +385,7 @@ const App: React.FC = () => {
 
     return (
         <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} font-sans`}>
-            {loggedInUser && <NavBar user={loggedInUser} onLogout={handleLogout} isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} />}
+            {loggedInUser && <NavBar user={loggedInUser} onLogout={handleLogout} isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} isOnline={isOnline} onToggleOnline={() => setIsOnline(!isOnline)} />}
             <main>
                 {renderContent()}
             </main>

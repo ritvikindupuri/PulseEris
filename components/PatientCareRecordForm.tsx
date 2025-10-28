@@ -1,13 +1,15 @@
+
 import React, { useState } from 'react';
 import { EmergencyCall, PatientCareRecord } from '../types';
 import { FileTextIcon } from './icons/FileTextIcon';
 import { GoogleGenAI } from "@google/genai";
 import { SparklesIcon } from './icons/SparklesIcon';
+import { DownloadIcon } from './icons/DownloadIcon';
 
 
 interface PatientCareRecordFormProps {
   call: EmergencyCall;
-  onSubmit: (pcrData: Omit<PatientCareRecord, 'id' | 'callId'>) => void;
+  onSubmit: (pcrData: Omit<PatientCareRecord, 'id' | 'callId' | 'isSynced'>) => void;
   onCancel: () => void;
 }
 
@@ -44,11 +46,12 @@ const PatientCareRecordForm: React.FC<PatientCareRecordFormProps> = ({ call, onS
             Medications: ${formData.medications || 'Not specified'}.
             Notes: ${formData.notes || 'Not specified'}.
             Destination: ${formData.transferDestination || 'Not specified'}.
+            Incident: ${call.description}
         `;
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-lite",
-            contents: `You are an expert paramedic. Convert the following raw notes into a professional, concise patient care report narrative suitable for a PCR form. Use standard medical abbreviations. Notes: \n${rawNotes}`
+            contents: `You are an expert paramedic writing a patient care report. Convert the following raw notes into a professional, concise narrative suitable for an official PCR. Use standard medical terminology and abbreviations (e.g., "c/o" for "complains of", "Hx" for "history"). Ensure the narrative is clear, objective, and chronologically ordered. Raw Notes: \n${rawNotes}`
         });
 
         setGeneratedNarrative(response.text);
@@ -59,6 +62,10 @@ const PatientCareRecordForm: React.FC<PatientCareRecordFormProps> = ({ call, onS
     } finally {
         setIsGeneratingNarrative(false);
     }
+  };
+
+  const handleUseNarrative = () => {
+    setFormData(prev => ({...prev, notes: generatedNarrative}));
   };
 
   return (
@@ -97,21 +104,29 @@ const PatientCareRecordForm: React.FC<PatientCareRecordFormProps> = ({ call, onS
               <label htmlFor="transferDestination" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Transfer Destination</label>
               <input type="text" name="transferDestination" id="transferDestination" value={formData.transferDestination} onChange={handleChange} required placeholder="e.g., Mercy General Hospital" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-200"/>
             </div>
-             <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Additional Notes</label>
-              <textarea name="notes" id="notes" rows={2} value={formData.notes} onChange={handleChange} placeholder="Any other relevant information" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-200"></textarea>
-            </div>
           </div>
 
           <div className="mt-6 border-t dark:border-gray-700 pt-6">
             <div className="flex justify-between items-center">
-                <label htmlFor="generatedNarrative" className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI Generated Narrative</label>
+                <label htmlFor="generatedNarrative" className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI Scribe</label>
                 <button type="button" onClick={handleGenerateNarrative} disabled={isGeneratingNarrative} className="flex items-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-3 rounded-md shadow-sm transition-colors disabled:opacity-50">
                     {isGeneratingNarrative ? <SparklesIcon className="h-4 w-4 animate-spin"/> : <SparklesIcon className="h-4 w-4" />}
-                    {isGeneratingNarrative ? 'Generating...' : 'Generate with AI'}
+                    {isGeneratingNarrative ? 'Generating...' : 'Generate Narrative'}
                 </button>
             </div>
-            <textarea name="generatedNarrative" id="generatedNarrative" rows={5} value={generatedNarrative} readOnly placeholder="Click 'Generate with AI' to create a narrative from the fields above..." className="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none sm:text-sm text-gray-900 dark:text-gray-200 cursor-not-allowed"></textarea>
+            <textarea name="generatedNarrative" id="generatedNarrative" rows={5} value={generatedNarrative} onChange={(e) => setGeneratedNarrative(e.target.value)} placeholder="Click 'Generate Narrative' to create a summary from the fields above, then review and edit as needed..." className="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none sm:text-sm text-gray-900 dark:text-gray-200"></textarea>
+             {generatedNarrative && (
+                <div className="text-right mt-2">
+                    <button type="button" onClick={handleUseNarrative} className="flex items-center gap-2 text-sm bg-teal-600 hover:bg-teal-700 text-white font-semibold py-1 px-3 rounded-md shadow-sm transition-colors">
+                        <DownloadIcon className="h-4 w-4 transform -rotate-90"/> Use Narrative in Notes
+                    </button>
+                </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Final Narrative / Additional Notes</label>
+            <textarea name="notes" id="notes" rows={4} value={formData.notes} onChange={handleChange} placeholder="The final narrative for the report. You can use the AI scribe above and copy the text here." className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900 dark:text-gray-200"></textarea>
           </div>
 
           <div className="mt-8 flex justify-end space-x-4">

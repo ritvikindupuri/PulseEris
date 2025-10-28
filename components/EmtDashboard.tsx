@@ -1,20 +1,25 @@
+
 import React, { useMemo } from 'react';
-import { EmergencyCall, CallStatus, User, Team, TeamStatus, EmtStatus } from '../types';
+import { EmergencyCall, CallStatus, User, Team, PatientCareRecord, EmtStatus } from '../types';
 import { MapPinIcon } from './icons/MapPinIcon';
 import { FileTextIcon } from './icons/FileTextIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import ShiftSummaryCharts from './ShiftSummaryCharts';
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
+import { AlertIcon } from './icons/AlertIcon';
+import { WifiOffIcon } from './icons/WifiOffIcon';
+import { CheckCircleIcon } from './icons/CheckCircleIcon';
 
 interface EmtDashboardProps {
   user: User;
   calls: EmergencyCall[];
   teams: Team[];
+  pcrs: PatientCareRecord[];
   onFilePCR: (call: EmergencyCall) => void;
-  // FIX: Replaced onUpdateTeamStatus with onUpdateCallStatus for better logic flow and to align with changes in App.tsx.
   onUpdateCallStatus: (callId: number, status: CallStatus, teamId: number) => void;
   onUpdateUserStatus: (userId: number, status: EmtStatus) => void;
   isDarkMode: boolean;
+  isOnline: boolean;
 }
 
 const getPriorityClass = (priority: number) => {
@@ -27,8 +32,7 @@ const getPriorityClass = (priority: number) => {
   }
 };
 
-// FIX: Destructured onUpdateCallStatus instead of onUpdateTeamStatus.
-const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFilePCR, onUpdateCallStatus, onUpdateUserStatus, isDarkMode }) => {
+const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, pcrs, onFilePCR, onUpdateCallStatus, onUpdateUserStatus, isDarkMode, isOnline }) => {
   
   const myTeam = useMemo(() => teams.find(t => t.id === user.teamId), [teams, user.teamId]);
   
@@ -43,6 +47,11 @@ const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFileP
     today.setHours(0,0,0,0);
     return calls.filter(c => c.assignedTeamId === myTeam.id && c.status === CallStatus.COMPLETED && c.timestamp >= today);
   }, [calls, myTeam]);
+  
+  const unsyncedPcrCount = useMemo(() => {
+      const myTeamCallIds = new Set(calls.filter(c => c.assignedTeamId === user.teamId).map(c => c.id));
+      return pcrs.filter(p => !p.isSynced && myTeamCallIds.has(p.callId)).length;
+  }, [pcrs, calls, user.teamId]);
 
   const priorityClass = assignedCall ? getPriorityClass(assignedCall.priority) : getPriorityClass(0);
 
@@ -80,6 +89,19 @@ const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFileP
             </button>
         </header>
 
+        {!isOnline && (
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                <p className="font-bold flex items-center gap-2"><WifiOffIcon className="h-5 w-5"/> You are currently offline.</p>
+                <p>New Patient Care Records will be saved locally and synced when you reconnect.</p>
+            </div>
+        )}
+        {isOnline && unsyncedPcrCount > 0 && (
+             <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6" role="alert">
+                <p className="font-bold">Syncing in progress...</p>
+                <p>{unsyncedPcrCount} locally saved record(s) are being synced to the server.</p>
+            </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             {/* Current Assignment */}
             <div className="lg:col-span-2">
@@ -105,12 +127,20 @@ const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFileP
                         <div className="p-6 bg-white dark:bg-gray-800">
                              <p className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-4">Update Status: <span className="text-blue-500">{assignedCall.status}</span></p>
                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {/* FIX: Updated onClick to call onUpdateCallStatus with required parameters (callId, status, teamId). */}
                                 <button onClick={() => onUpdateCallStatus(assignedCall.id, CallStatus.ON_SCENE, myTeam.id)} disabled={assignedCall.status !== CallStatus.DISPATCHED} className="p-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition">On Scene</button>
                                 <button onClick={() => onUpdateCallStatus(assignedCall.id, CallStatus.TRANSPORTING, myTeam.id)} disabled={assignedCall.status !== CallStatus.ON_SCENE} className="p-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition">Transporting</button>
                                 <button onClick={() => onUpdateCallStatus(assignedCall.id, CallStatus.COMPLETED, myTeam.id)} disabled={assignedCall.status !== CallStatus.ON_SCENE && assignedCall.status !== CallStatus.TRANSPORTING} className="p-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition">Complete Call</button>
                                 {assignedCall.pcrId ? (
-                                     <div className="p-3 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center font-semibold rounded-lg">PCR Filed</div>
+                                     <div className="p-3 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center font-semibold rounded-lg flex items-center justify-center gap-2">
+                                        PCR Filed
+                                        {(() => {
+                                            const pcr = pcrs.find(p => p.id === assignedCall.pcrId);
+                                            if (!pcr) return null;
+                                            return pcr.isSynced 
+                                                ? <CheckCircleIcon className="h-5 w-5 text-green-500" title="Synced"/> 
+                                                : <WifiOffIcon className="h-5 w-5 text-yellow-600" title="Saved locally"/>;
+                                        })()}
+                                     </div>
                                 ) : (
                                     <button onClick={() => onFilePCR(assignedCall)} disabled={assignedCall.status !== CallStatus.COMPLETED} className="p-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2">
                                         <FileTextIcon className="h-5 w-5"/> File PCR
@@ -154,76 +184,5 @@ const EmtDashboard: React.FC<EmtDashboardProps> = ({ user, calls, teams, onFileP
     </div>
   );
 };
-
-// Dummy ShiftSummaryCharts component
-const ShiftSummaryCharts: React.FC<{completedCalls: EmergencyCall[], isDarkMode: boolean}> = ({completedCalls, isDarkMode}) => {
-    const chartRef = React.useRef<HTMLCanvasElement>(null);
-    const chartInstance = React.useRef<any>(null);
-
-    React.useEffect(() => {
-        if (!chartRef.current) return;
-        
-        const priorityCounts = completedCalls.reduce((acc, call) => {
-            acc[call.priority-1] = (acc[call.priority-1] || 0) + 1;
-            return acc;
-        }, [] as number[]);
-
-        if (chartInstance.current) {
-            chartInstance.current.destroy();
-        }
-
-        const ctx = chartRef.current.getContext('2d');
-        if (!ctx) return;
-        
-        chartInstance.current = new (window as any).Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Priority 1', 'Priority 2', 'Priority 3', 'Priority 4'],
-                datasets: [{
-                    label: 'Calls by Priority',
-                    data: priorityCounts,
-                    backgroundColor: ['#EF4444', '#F59E0B', '#3B82F6', '#10B981'],
-                    borderColor: isDarkMode ? '#374151' : '#FFFFFF',
-                    borderWidth: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: isDarkMode ? '#D1D5DB' : '#4B5563',
-                            boxWidth: 12,
-                            padding: 20,
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Completed Calls by Priority',
-                        color: isDarkMode ? '#F9FAFB' : '#1F2937',
-                        font: { size: 16 }
-                    }
-                },
-                cutout: '60%'
-            }
-        });
-
-    }, [completedCalls, isDarkMode]);
-
-    return (
-        <div className="h-64 relative">
-             {completedCalls.length > 0 ? (
-                <canvas ref={chartRef}></canvas>
-             ) : (
-                <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
-                    <p>No completed calls in this shift yet.</p>
-                </div>
-             )}
-        </div>
-    );
-};
-
 
 export default EmtDashboard;

@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import { EmergencyCall, Team, CallStatus, TeamStatus } from '../types';
+import { EmergencyCall, Team, CallStatus, TeamStatus, Priority } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { SearchIcon } from './icons/SearchIcon';
 import { NoResultsIcon } from './icons/NoResultsIcon';
@@ -20,12 +19,16 @@ const DispatcherDashboard: React.FC<DispatcherDashboardProps> = ({ calls, teams,
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCall, setSelectedCall] = useState<EmergencyCall | null>(null);
   const [showEODReport, setShowEODReport] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
 
   const pendingCalls = useMemo(() =>
-    calls.filter(c => c.status === CallStatus.PENDING &&
-      (c.location.toLowerCase().includes(searchTerm.toLowerCase()) || c.description.toLowerCase().includes(searchTerm.toLowerCase())))
-      .sort((a, b) => a.priority - b.priority || a.timestamp.getTime() - b.timestamp.getTime()),
-    [calls, searchTerm]
+    calls.filter(c => 
+        c.status === CallStatus.PENDING &&
+        (priorityFilter === 'all' || c.priority === priorityFilter) &&
+        (c.location.toLowerCase().includes(searchTerm.toLowerCase()) || c.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => a.priority - b.priority || a.timestamp.getTime() - b.timestamp.getTime()),
+    [calls, searchTerm, priorityFilter]
   );
 
   const activeCalls = useMemo(() =>
@@ -76,17 +79,32 @@ const DispatcherDashboard: React.FC<DispatcherDashboardProps> = ({ calls, teams,
         {/* Pending Calls */}
         <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-4 flex-grow flex flex-col">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">Pending Incidents</h2>
-          <div className="relative mb-4">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-              <SearchIcon className="h-5 w-5 text-gray-400" />
-            </span>
-            <input
-              type="text"
-              placeholder="Search by location or description..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full p-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="relative flex-grow">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                <SearchIcon className="h-5 w-5 text-gray-400" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search by location or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full p-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+              />
+            </div>
+             <div>
+                <select 
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10) as Priority)}
+                    className="w-full sm:w-auto p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 h-full"
+                >
+                    <option value="all">All Priorities</option>
+                    <option value={1}>Priority 1</option>
+                    <option value={2}>Priority 2</option>
+                    <option value={3}>Priority 3</option>
+                    <option value={4}>Priority 4</option>
+                </select>
+            </div>
           </div>
           <div className="overflow-y-auto flex-grow">
             {pendingCalls.length > 0 ? (
@@ -108,7 +126,7 @@ const DispatcherDashboard: React.FC<DispatcherDashboardProps> = ({ calls, teams,
                 <div className="text-center py-10">
                     <NoResultsIcon className="mx-auto h-12 w-12 text-gray-400" />
                     <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No pending calls</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">All incidents have been dispatched.</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Try adjusting your search or filter.</p>
                 </div>
             )}
           </div>

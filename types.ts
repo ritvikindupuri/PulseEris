@@ -20,6 +20,7 @@ export interface User {
   role: UserRole;
   status: EmtStatus | null;
   teamId?: number;
+  certifications?: string[];
 }
 
 export enum CallStatus {
@@ -58,6 +59,7 @@ export interface PatientCareRecord {
   medications: string;
   transferDestination: string;
   notes?: string;
+  isSynced: boolean;
 }
 
 export enum TeamStatus {

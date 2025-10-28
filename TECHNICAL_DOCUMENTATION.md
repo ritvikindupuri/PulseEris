@@ -39,7 +39,7 @@ graph TD;
             S -- Contains --> F[PCRs];
             S -- Contains --> G[Schedule];
             S -- Contains --> H[Audit Log];
-            S -- Contains --> I["UI State (View, Theme, etc)"];
+            S -- Contains --> I["UI State (View, Theme, isOnline)"];
         end;
         
         V -->|'login'| Login[LoginPage];
@@ -67,6 +67,7 @@ graph TD;
             E_Dash -- Renders --> Charts[ShiftSummaryCharts];
             S_Dash -- Renders --> Scheduler[SchedulingTool];
             S_Dash -- Renders --> ExceptionModal[ExceptionReportModal];
+            S_Dash -- Renders --> EditUserModal[EditUserModal];
 
             LogCall -- Calls --> Gemini[Gemini API];
             FilePCR -- Calls --> Gemini;
@@ -124,6 +125,9 @@ graph LR
         UC14(Authenticate)
         UC15(View Shift Analytics)
         UC16(Export Incident Data)
+        UC17(Manage Personnel Certs)
+        UC18(Export Audit Logs)
+        UC19(File PCR Offline)
 
         UC1 -- "uses" --> AI_Priority(AI Priority Suggestion)
         UC1 -- "uses" --> AI_Maps(AI Location Intelligence)
@@ -141,16 +145,19 @@ graph LR
     EMT -- "Submits" --> UC6;
     EMT -- "Performs" --> UC7;
     EMT -- "Views" --> UC15;
+    EMT -- "Performs" --> UC19;
 
     Supervisor -- "Performs" --> UC8;
     Supervisor -- "Performs" --> UC9;
     Supervisor -- "Generates" --> UC10;
     Supervisor -- "Performs" --> UC16;
+    Supervisor -- "Performs" --> UC17;
     
     COO -- "Views" --> UC11;
     
     Admin -- "Views" --> UC12;
     Admin -- "Performs" --> UC13;
+    Admin -- "Performs" --> UC18;
     
     Dispatcher -- "signs in" --> UC14;
     EMT -- "signs in" --> UC14;
@@ -176,6 +183,7 @@ State is managed centrally within the `App.tsx` component using `React.useState`
 -   `loggedInUser: User | null`: The object of the currently authenticated user, which determines their role and permissions.
 -   `view: AppView`: A string that controls which primary component or "page" is rendered (e.g., 'login', 'dashboard', 'logCall').
 -   `isDarkMode: boolean`: A boolean flag that controls the application's light/dark theme.
+-   `isOnline: boolean`: A boolean flag used to simulate network connectivity for testing offline capabilities.
 -   `callToEdit: EmergencyCall | null`: Temporarily stores the call object for which a PCR is being filed.
 -   `confirmationMessage: string`: Stores the message to be displayed on the confirmation page.
 
@@ -184,116 +192,77 @@ State is managed centrally within the `App.tsx` component using `React.useState`
 ### `App.tsx`
 The root component and central nervous system of the application. It is responsible for:
 -   Initializing and managing all application state.
--   Containing all state-mutating logic (e.g., `handleLogCallSubmit`, `handleUpdateTeamStatus`).
+-   Containing all state-mutating logic (e.g., `handleLogCallSubmit`, `handleUpdateUser`).
 -   Containing the audit logging function `logAuditEvent`.
+-   Implementing the simulated offline sync logic in a `useEffect` hook.
 -   Passing state and callback functions down to child components as props.
 -   Rendering the correct view or dashboard based on the `view` and `loggedInUser` state.
 
 ### Role-Based Dashboards
 -   **`DispatcherDashboard.tsx`**: A feature-rich interface displaying pending incidents, available teams, and the `LiveMapPanel`. It provides entry points for logging new calls and generating an `EODReportModal`.
--   **`EmtDashboard.tsx`**: A streamlined view focused on the EMT's active assignment. It features clear action buttons and access to the `PatientCareRecordForm` which contains the AI Scribe.
--   **`SupervisorDashboard.tsx`**: An operational overview with KPI cards, a filterable team roster, and access to the `SchedulingTool` and `ExceptionReportModal`.
+-   **`EmtDashboard.tsx`**: A streamlined view focused on the EMT's active assignment. It now includes offline status indicators and shows sync status for filed PCRs.
+-   **`SupervisorDashboard.tsx`**: A multi-tab operational overview. It now includes a "Personnel Management" tab for editing user certifications via the new `EditUserModal`, in addition to its existing team roster and scheduling capabilities.
 -   **`COODashboard.tsx`**: An executive-level dashboard focused on Service Level Agreement (SLA) analytics.
--   **`AdminDashboard.tsx`**: A simple interface for viewing the immutable `auditLog`.
+-   **`AdminDashboard.tsx`**: A simple interface for viewing the immutable `auditLog`, now with functionality to export the log to a CSV file.
 
 ### Key UI & Logic Components
--   **`LogCallForm.tsx`**: A controlled form for entering new incident details. It integrates two Gemini features: a debounced `useEffect` hook for priority suggestions and an on-demand function for location intelligence using Maps Grounding.
--   **`PatientCareRecordForm.tsx`**: A form for EMTs to file reports. It includes an "AI Scribe" feature that calls the `gemini-2.5-flash-lite` model to generate a narrative from raw notes.
--   **`EODReportModal.tsx` & `ExceptionReportModal.tsx`**: These components display summary statistics and include buttons that trigger Gemini API calls (`gemini-2.5-pro` for deep analysis, `gemini-2.5-flash` for summarization) to provide qualitative insights.
--   **`LiveMapPanel.tsx`**: A simulation of a real-time map using `useEffect` with a `setInterval` to manage the positions of team and incident icons.
--   **`SchedulingTool.tsx`**: A modal overlay for assigning teams to weekly shifts. It manages its own local copy of the schedule state to prevent re-renders on each change.
+-   **`PatientCareRecordForm.tsx`**: A form for EMTs to file reports. The "AI Scribe" feature has been enhanced with a "Use Narrative" button to copy the AI-generated text to the main notes field, allowing for review and editing.
+-   **`ExceptionReportModal.tsx`**: This modal for supervisors now includes a "Regenerate" button, allowing them to get an updated AI summary if the situation changes before a shift handover.
+-   **`EditUserModal.tsx`**: A new modal used by supervisors to edit user details. Currently, it allows for updating an EMT's certifications.
 
 ## 5. Key Workflow Diagrams
 
-### 5.1. AI-Assisted Call Logging – Dispatcher Flow
+### 5.1. Offline PCR Submission – EMT Flow
 
-This diagram illustrates the step-by-step process a dispatcher follows to log a new call, highlighting the interaction with the AI-powered system components.
+This diagram shows how the system handles PCR submissions when the application is in a simulated offline state.
 
 ```mermaid
-activityDiagram
-    title "AI-Assisted Call Logging – Dispatcher Flow"
+sequenceDiagram
+    participant EMT
+    participant App.tsx
+    participant LocalStorage
+
+    EMT->>+App.tsx: Fills out PCR and clicks Submit
+    App.tsx->>App.tsx: Checks `isOnline` state (returns false)
+    App.tsx->>App.tsx: Creates PCR object with `isSynced: false`
+    App.tsx->>+LocalStorage: Saves updated PCRs array
+    LocalStorage-->>-App.tsx: Acknowledges save
+    App.tsx-->>-EMT: Shows "Saved Locally" confirmation
     
-    |Dispatcher|
-    start
-    :Incoming emergency call received;
-    :Click 'Log New Call';
-    :Enter caller info and incident description;
-    if (All required fields filled?) then (Yes)
-        |System|
-        :Invoke Gemini model for priority suggestion;
-        :Display suggested priority to dispatcher;
-        |Dispatcher|
-        if (Accept AI suggestion?) then (Yes)
-            'Continue';
-        else (No)
-            :Manually choose priority;
-        endif
-        |System|
-        :Check duplicates in CallDB;
-        if (Duplicate Found?) then (Yes)
-            :Prompt link to existing record;
-            note right: Linked
-            end
-        else (No)
-            :Save new call record and show confirmation;
-            note right: Call logged successfully
-            end
-        endif
-    else (No)
-        :Display validation error;
-        -> Enter caller info and incident description;
-    endif
+    Note over EMT, App.tsx: Later, user simulates going online...
+    
+    EMT->>+App.tsx: Toggles network status to Online
+    App.tsx->>App.tsx: `useEffect` hook triggers on `isOnline` change
+    App.tsx->>App.tsx: Finds all PCRs where `isSynced` is false
+    App.tsx->>App.tsx: Updates their status to `isSynced: true` (Simulates API call)
+    App.tsx->>+LocalStorage: Saves newly synced PCRs array
+    LocalStorage-->>-App.tsx: Acknowledges save
+    App.tsx-->>-EMT: (Optional) Shows "Sync Complete" notification
 ```
 
 ## 6. Key Workflows & Business Logic
 
-### 6.1. AI-Powered Workflows
-The application integrates Gemini in four key areas to enhance user capabilities.
+### 6.1. Offline PCR Syncing
+-   **State**: A new boolean state, `isOnline`, is managed in `App.tsx` and can be toggled via the `NavBar` for simulation.
+-   **Submission**: When `handleFilePCRSubmit` is called, it checks `isOnline`. If `false`, the new `PatientCareRecord` object is created with an `isSynced: false` property.
+-   **Synchronization**: A `useEffect` hook in `App.tsx` is dependent on the `isOnline` state. When `isOnline` changes to `true`, the effect triggers, finds all PCRs with `isSynced: false`, and updates them to `isSynced: true`, simulating a sync process. A `setTimeout` mimics network latency.
 
-1.  **AI Priority Suggestion (`LogCallForm`)**
-    -   **Trigger**: A `useEffect` hook observes changes to the `description` field.
-    -   **Logic**: A 1-second debounce (`setTimeout`) prevents excessive API calls. The `gemini-2.5-flash` model is prompted with instructions to classify the description into a priority level from 1-4 and respond with a single digit.
-    -   **Result**: The form's `priority` state is updated, which the dispatcher can override.
-
-2.  **AI Location Intelligence (`LogCallForm`)**
-    -   **Trigger**: User clicks the "Verify Location" button.
-    -   **Logic**: The app requests the user's `navigator.geolocation`. An API call is made to `gemini-2.5-flash` with the `googleMaps` tool enabled, passing the address and optionally the user's coordinates. The prompt asks for access challenges and nearby hospitals.
-    -   **Result**: The model's text response and any associated map links from the `groundingChunks` are displayed below the location input.
-
-3.  **Low-Latency AI Scribe (`PatientCareRecordForm`)**
-    -   **Trigger**: EMT clicks the "Generate with AI" button.
-    -   **Logic**: The content from the Vitals, Treatments, Medications, and Notes fields is compiled into a single string. A prompt is sent to the `gemini-2.5-flash-lite` model, instructing it to act as an expert paramedic and convert the notes into a professional PCR narrative.
-    -   **Result**: The generated text populates a read-only "AI Generated Narrative" text area, which the EMT can reference.
-
-4.  **AI Analysis & Summarization (`EODReportModal`, `ExceptionReportModal`)**
-    -   **Trigger**: User clicks the "Analyze" or "Generate AI Handover Summary" button.
-    -   **Logic**: Relevant data (daily calls or open incidents) is summarized into a text block. This context is sent to the Gemini API with a role-specific prompt (e.g., "act as an EMS analyst" or "act as a shift supervisor").
-    -   **Models**: `gemini-2.5-pro` is used for the EOD report for deeper analysis, while the faster `gemini-2.5-flash` is used for the handover summary.
-    -   **Result**: The formatted text response is displayed in a designated area within the modal.
-
-### 6.2. Team & Schedule Management
--   A supervisor can edit a team's roster via a modal. The `handleUpdateTeam` function in `App.tsx` receives the updated team object. It then updates the `teams` state and also iterates through the `users` state to update the `teamId` for any members who were added or removed, maintaining a single source of truth.
--   The weekly schedule is managed similarly. The `SchedulingTool` works on a local copy of the schedule. When saved, the entire updated schedule object is passed to `handleUpdateSchedule` in `App.tsx`, which replaces the old schedule in the main state.
-
-### 6.3. Auditing
--   The `logAuditEvent` function in `App.tsx` is a centralized utility for recording actions. It is called from within other state-updating functions (e.g., `handleLogin`, `handleAssignTeam`). It constructs a new log entry and prepends it to the `auditLog` state array, ensuring the log is always displayed in reverse chronological order.
+### 6.2. Personnel & Team Management
+-   **Editing Certs**: A supervisor can now edit an EMT's certifications. This is handled by a new `handleUpdateUser` function in `App.tsx`. The `SupervisorDashboard` renders an `EditUserModal`, which, upon saving, calls this function to update the central `users` state.
+-   **Informed Team Building**: The `SupervisorDashboard`'s "Edit Team" modal now displays the certifications of each EMT, allowing the supervisor to make more strategic decisions when assigning members to a team. The main team roster table also displays a summary of member certifications.
 
 ## 7. Non-Functional Requirements
 
--   **Performance**: `React.useMemo` is used extensively in dashboards to memoize filtered and sorted lists, preventing costly re-calculations on every render. The choice of specific Gemini models (e.g., `flash-lite` for the scribe) is a performance optimization for user experience.
+-   **Performance**: `React.useMemo` is used extensively in dashboards to memoize filtered and sorted lists, preventing costly re-calculations on every render.
+-   **Data Integrity**: In the absence of a backend, the application ensures data integrity by centralizing all state mutations in `App.tsx`. For example, assigning a user to a team (`handleUpdateTeam`) updates both the `teams` and `users` state slices to maintain consistency.
 -   **Accessibility (A11y)**: The application incorporates semantic HTML, ARIA roles, `htmlFor` attributes, and ensures interactive elements are keyboard-focusable.
 -   **Responsiveness**: Tailwind CSS's mobile-first utility classes are used to ensure the layout adapts seamlessly from large desktop monitors to mobile devices.
--   **Security**: As a frontend-only application, security is limited. In a production environment, this would be expanded to include:
-    -   **Authentication**: Using JWTs (JSON Web Tokens) exchanged with a secure backend.
-    -   **Authorization**: The backend would enforce role-based access control, not just the client.
-    -   **Transport Security**: All API communication would be over HTTPS.
-    -   **Input Sanitization**: Backend validation would be the source of truth to prevent injection attacks.
 
 ## 8. Conclusion & Future Work
 
-PulsePoint ERIS currently stands as a high-fidelity, feature-complete prototype that demonstrates the core workflows of a modern, AI-enhanced Emergency Response Information System. Its robust, role-based architecture and clean, responsive UI successfully meet the initial design goals.
+PulsePoint ERIS is now a feature-complete prototype that demonstrates all core workflows specified in the product backlog. The addition of offline capabilities, advanced supervisor controls for personnel management, and enhanced AI interactions successfully meet the project's design goals.
 
-The logical next phase is to evolve the application into a production-ready, multi-user system. The roadmap includes:
+The logical next phase is to evolve the application into a production-ready, multi-user system. The roadmap remains focused on:
 
 1.  **Backend Integration:** Develop a robust backend service (e.g., using Node.js, Python, or Go) to manage a persistent database (e.g., PostgreSQL).
 2.  **Real-Time Communication:** Replace the `setInterval` map simulation with a real-time solution using WebSockets for instantaneous updates across all connected clients.

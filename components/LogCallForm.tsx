@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { SparklesIcon } from './icons/SparklesIcon';
 import { MapPinIcon } from './icons/MapPinIcon';
 
-type CallFormData = Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTo'>;
+type CallFormData = Omit<EmergencyCall, 'id' | 'timestamp' | 'status' | 'pcrId' | 'assignedTeamId' | 'dispatchTimestamp' | 'onSceneTimestamp' | 'completedTimestamp'>;
 
 interface LogCallFormProps {
   onSubmit: (callData: CallFormData) => void;

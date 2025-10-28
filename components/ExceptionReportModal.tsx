@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { EmergencyCall, Team } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -9,10 +10,9 @@ interface ExceptionReportModalProps {
     openIncidents: EmergencyCall[];
     teams: Team[];
     onClose: () => void;
-    onExport: () => void;
 }
 
-const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openIncidents, teams, onClose, onExport }) => {
+const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openIncidents, teams, onClose }) => {
     const [handoverSummary, setHandoverSummary] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
     
@@ -52,6 +52,23 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
             setIsGeneratingSummary(false);
         }
     };
+    
+    const handleExportExceptions = () => {
+        const headers = "ID,Priority,Status,Location,Description,Timestamp,Assigned Team\n";
+        const csvData = openIncidents.map(c => {
+            const teamName = teams.find(t => t.id === c.assignedTeamId)?.name || 'N/A';
+            const description = `"${c.description.replace(/"/g, '""')}"`;
+            return [c.id, c.priority, c.status, c.location, description, c.timestamp.toISOString(), teamName].join(',');
+        }).join('\n');
+        const blob = new Blob([headers + csvData], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `pulsepoint_open_incidents_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -62,10 +79,13 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
                 </div>
 
                 <div className="mb-4">
-                    <button type="button" onClick={handleGenerateSummary} disabled={isGeneratingSummary || openIncidents.length === 0} className="w-full flex items-center justify-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-md shadow-sm transition-colors disabled:opacity-50">
-                        {isGeneratingSummary ? <SparklesIcon className="h-4 w-4 animate-spin"/> : <SparklesIcon className="h-4 w-4" />}
-                        {isGeneratingSummary ? 'Generating Summary...' : 'Generate AI Handover Summary'}
-                    </button>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={handleGenerateSummary} disabled={isGeneratingSummary || openIncidents.length === 0} className="w-full flex items-center justify-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-md shadow-sm transition-colors disabled:opacity-50">
+                            <SparklesIcon className="h-4 w-4" />
+                            {isGeneratingSummary ? 'Generating...' : handoverSummary ? 'Regenerate Summary' : 'Generate AI Handover Summary'}
+                        </button>
+                    </div>
+                    {isGeneratingSummary && <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">Generating AI summary...</p>}
                     {handoverSummary && (
                         <div className="mt-3 p-3 text-sm bg-indigo-50 dark:bg-gray-700 rounded-md text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                             <h4 className="font-bold mb-1">AI Summary:</h4>
@@ -74,7 +94,7 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
                     )}
                 </div>
                 
-                <div className="space-y-4 my-4 max-h-[50vh] overflow-y-auto">
+                <div className="space-y-4 my-4 max-h-[50vh] overflow-y-auto pr-2">
                     {openIncidents.length > 0 ? openIncidents.map(call => (
                          <div key={call.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                             <div className="flex justify-between items-start">
@@ -94,7 +114,7 @@ const ExceptionReportModal: React.FC<ExceptionReportModalProps> = ({ openInciden
 
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-100 font-bold rounded-md transition">Close</button>
-                    <button onClick={onExport} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition flex items-center gap-2">
+                    <button onClick={handleExportExceptions} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition flex items-center gap-2">
                         <DownloadIcon /> Export as CSV
                     </button>
                 </div>
